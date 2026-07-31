@@ -1,0 +1,11 @@
+{
+  "topic": "Dünyanın İlk Trafik Işığı",
+  "title": "Dünyanın İlk Trafik Işığı",
+  "duration": 30,
+  "fps": 30,
+  "shots": [
+    {"id":1,"start":0,"duration":10,"narration":"İlk trafik ışığı elektrikle değil, gazla çalışıyordu.","visual":"Victorian London","camera":"wide","movement":"push-in","mood":"urgent mystery","imagePrompt":"Victorian London traffic signal","asset":"shots/01.svg"},
+    {"id":2,"start":10,"duration":10,"narration":"1868'de Parlamento önüne kuruldu ve polis tarafından elle yönetildi.","visual":"Gas semaphore detail","camera":"macro","movement":"pan-right","mood":"cinematic documentary","imagePrompt":"Gas semaphore mechanism","asset":"shots/02.svg"},
+    {"id":3,"start":20,"duration":10,"narration":"Fakat gaz sızıntısı patlamaya yol açınca sistem kısa sürede kaldırıldı.","visual":"Gas explosion consequence","camera":"close","movement":"zoom-out","mood":"powerful resolution","imagePrompt":"Historic gas signal aftermath","asset":"shots/03.svg"}
+  ]
+}
