@@ -2,25 +2,34 @@ name: Render Remotion Video
 
 on:
   workflow_dispatch:
-    inputs:
-      topic:
-        description: Video konusu
-        required: false
-        default: Dünyanın İlk Trafik Işığı
+  push:
+    branches: [main]
 
 jobs:
   render:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm install
-      - run: npm run typecheck
-      - run: npm run render
-      - uses: actions/upload-artifact@v4
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Render MP4
+        run: npm run render
+
+      - name: Upload video
+        uses: actions/upload-artifact@v4
         with:
           name: neosaniye-video
           path: out/video.mp4
+          if-no-files-found: error
