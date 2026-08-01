@@ -1,10 +1,11 @@
 {
   "name": "neosaniye-remotion-lab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "storyboard": "tsx scripts/generate-storyboard.ts",
+    "images": "tsx scripts/generate-images.ts",
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts NeoSaniyeShort out/video.mp4",
     "typecheck": "tsc --noEmit"
