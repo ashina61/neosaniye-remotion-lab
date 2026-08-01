@@ -1,4 +1,4 @@
-name: Render Remotion V3
+name: Render Remotion V3 Pollinations
 
 on:
   workflow_dispatch:
@@ -7,13 +7,17 @@ on:
         description: Video konusu
         required: true
         default: İstanbul'un Fethi
+      image_count:
+        description: Üretilecek gerçek görsel sayısı (6-12)
+        required: false
+        default: '12'
   push:
     branches: [main]
 
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,11 +30,20 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Generate V3 storyboard
+      - name: Generate storyboard with Pollinations
         env:
           TOPIC: ${{ github.event.inputs.topic || 'İstanbulun Fethi' }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          POLLINATIONS_TEXT_MODEL: openai-fast
         run: npm run storyboard -- "$TOPIC"
+
+      - name: Generate images with Pollinations
+        continue-on-error: true
+        env:
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          POLLINATIONS_IMAGE_MODEL: zimage
+          IMAGE_COUNT: ${{ github.event.inputs.image_count || '12' }}
+        run: npm run images
 
       - name: Typecheck
         run: npm run typecheck
@@ -43,12 +56,13 @@ jobs:
           test -s out/video.mp4
           test -s public/storyboard.json
 
-      - name: Upload V3 output
+      - name: Upload Pollinations output
         uses: actions/upload-artifact@v4
         with:
-          name: neosaniye-v3-output
+          name: neosaniye-pollinations-output
           path: |
             out/video.mp4
             public/storyboard.json
-          if-no-files-found: error
+            public/shots/*.jpg
+          if-no-files-found: warn
           retention-days: 7
