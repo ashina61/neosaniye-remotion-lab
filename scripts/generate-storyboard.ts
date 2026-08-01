@@ -4,7 +4,7 @@ import {buildStoryboard, StoryboardSchema} from '../src/storyboard.js';
 const topic = process.argv[2] ?? process.env.TOPIC ?? 'Dünyanın İlk Trafik Işığı';
 const scriptPath = process.argv[3] ?? 'input/script.txt';
 const outputPath = process.argv[4] ?? 'public/storyboard.json';
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = process.env.POLLINATIONS_API_KEY;
 
 const readLocalScript = async (): Promise<string | undefined> => {
   try {
@@ -15,7 +15,12 @@ const readLocalScript = async (): Promise<string | undefined> => {
   }
 };
 
-const generateWithGemini = async () => {
+const extractJson = (raw: string) => {
+  const cleaned = raw.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+  return JSON.parse(cleaned);
+};
+
+const generateWithPollinations = async () => {
   if (!apiKey) return undefined;
 
   const prompt = `You are a Turkish YouTube Shorts director. Create a factual, punchy 30-second documentary storyboard about: ${topic}.
@@ -36,23 +41,31 @@ Return ONLY valid JSON with this exact shape:
 }
 Rules: exactly 24 shots; first 3 are rapid hook shots; no generic filler; every shot must depict a distinct subject or framing; captions must preserve meaning and never split names awkwardly; no CTA.`;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+  const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
     method: 'POST',
-    headers: {'content-type': 'application/json'},
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`
+    },
     body: JSON.stringify({
-      contents: [{parts: [{text: prompt}]}],
-      generationConfig: {responseMimeType: 'application/json', temperature: 0.65}
+      model: process.env.POLLINATIONS_TEXT_MODEL || 'openai-fast',
+      messages: [
+        {role: 'system', content: 'Return only strict JSON. No markdown fences.'},
+        {role: 'user', content: prompt}
+      ],
+      temperature: 0.65
     })
   });
 
-  if (!response.ok) throw new Error(`Gemini HTTP ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Pollinations HTTP ${response.status}: ${await response.text()}`);
   const payload = await response.json() as any;
-  const raw = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error('Gemini boş yanıt döndürdü');
-  const parsed = JSON.parse(raw);
+  const raw = payload?.choices?.[0]?.message?.content;
+  if (!raw) throw new Error('Pollinations boş yanıt döndürdü');
+  const parsed = extractJson(raw);
   const duration = 30;
   const fps = 30;
   const beat = duration / parsed.shots.length;
+
   return StoryboardSchema.parse({
     version: 3,
     topic,
@@ -79,10 +92,10 @@ Rules: exactly 24 shots; first 3 are rapid hook shots; no generic filler; every 
 
 let storyboard;
 try {
-  storyboard = await generateWithGemini();
-  if (storyboard) console.log('Gemini ile konuya özel V3 storyboard üretildi.');
+  storyboard = await generateWithPollinations();
+  if (storyboard) console.log('Pollinations ile konuya özel V3 storyboard üretildi.');
 } catch (error) {
-  console.warn('Gemini üretimi başarısız; güvenli fallback kullanılacak.', error);
+  console.warn('Pollinations metin üretimi başarısız; güvenli fallback kullanılacak.', error);
 }
 
 if (!storyboard) {
