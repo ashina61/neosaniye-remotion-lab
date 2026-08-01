@@ -1,19 +1,19 @@
-name: Render Remotion Video
+name: Render Remotion V3
 
 on:
   workflow_dispatch:
     inputs:
       topic:
         description: Video konusu
-        required: false
-        default: Dünyanın İlk Trafik Işığı
+        required: true
+        default: İstanbul'un Fethi
   push:
     branches: [main]
 
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,9 +26,10 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Generate V2 storyboard
+      - name: Generate V3 storyboard
         env:
-          TOPIC: ${{ github.event.inputs.topic || 'Dünyanın İlk Trafik Işığı' }}
+          TOPIC: ${{ github.event.inputs.topic || 'İstanbulun Fethi' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run storyboard -- "$TOPIC"
 
       - name: Typecheck
@@ -37,11 +38,17 @@ jobs:
       - name: Render MP4
         run: npm run render
 
-      - name: Upload video and storyboard
+      - name: Validate output
+        run: |
+          test -s out/video.mp4
+          test -s public/storyboard.json
+
+      - name: Upload V3 output
         uses: actions/upload-artifact@v4
         with:
-          name: neosaniye-v2-output
+          name: neosaniye-v3-output
           path: |
             out/video.mp4
             public/storyboard.json
           if-no-files-found: error
+          retention-days: 7
