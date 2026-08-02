@@ -13,7 +13,7 @@ AUDIO.mkdir(parents=True, exist_ok=True)
 SFX.mkdir(parents=True, exist_ok=True)
 
 FPS = 30
-SCENE_FRAMES = [195, 210, 225, 240, 240, 240]
+SCENE_FRAMES = [195, 210, 225, 240, 240, 390]
 LINES = [
     "2019'un sonunda, yeni bir solunum yolu hastalığı haberi kısa sürede dünyanın dikkatini çekti.",
     "Virüs aylar içinde ülkeler arasında yayıldı. Dünya Sağlık Örgütü, 11 Mart 2020'de Covid-19'u pandemi olarak tanımladı.",
@@ -37,7 +37,7 @@ async def narration() -> None:
         await edge_tts.Communicate(line, voice=voice, rate='+7%', pitch='-2Hz').save(str(mp3))
         run(
             'ffmpeg', '-y', '-i', str(mp3),
-            '-af', f'adelay=260|260,volume=1.12,highpass=f=70,lowpass=f=11500,afade=t=out:st={max(0.5, duration - 0.35)}:d=0.3,apad=pad_dur={duration}',
+            '-af', f'adelay=260|260,volume=1.12,highpass=f=70,lowpass=f=11500,afade=t=out:st={max(0.5, duration - 0.65)}:d=0.55,apad=pad_dur={duration}',
             '-t', f'{duration:.3f}', '-ar', '44100', '-ac', '2', str(wav),
         )
         mp3.unlink(missing_ok=True)
@@ -94,14 +94,14 @@ def make_score() -> None:
             value += math.sin(2 * math.pi * 49 * local) * 0.008
             pulse = max(0.0, math.sin(2 * math.pi * 0.125 * local)) ** 8
             value += math.sin(2 * math.pi * 294 * local) * pulse * 0.006
-            scene_env = envelope(local, scene_duration, 0.9, 1.15)
+            scene_env = envelope(local, scene_duration, 0.9, 1.35)
             samples[sample_index] += value * scene_env
 
-    fade_start = duration - 3.4
+    fade_start = duration - 4.8
     for sample_index in range(total):
         time = sample_index / rate
         if time > fade_start:
-            samples[sample_index] *= max(0.0, (duration - time) / (duration - fade_start)) ** 1.45
+            samples[sample_index] *= max(0.0, (duration - time) / (duration - fade_start)) ** 1.35
 
     write_wav(AUDIO / 'score.wav', samples, rate)
 
