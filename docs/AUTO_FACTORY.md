@@ -1,40 +1,72 @@
-# NeoSaniye Auto Factory
+# NeoSaniye Auto Factory V2
 
-Bu workflow, GitHub Actions üzerinden konu seçip baştan sona otomatik dikey belgesel Shorts üretir.
+GitHub Actions üzerinden konu seçip baştan sona otomatik dikey belgesel Shorts üretir. Repo içinde aktif üretim workflow'u yalnızca `.github/workflows/auto-short-factory.yml` dosyasıdır.
 
 ## Kullanım
 
 1. Repository içinde **Actions** sekmesine gir.
-2. Soldan **NeoSaniye Auto Factory** workflow'unu aç.
+2. Soldan **NeoSaniye Auto Factory V2** workflow'unu aç.
 3. **Run workflow** düğmesine bas.
-4. Konu seçimini yap:
-   - `random`: kategori havuzundan otomatik konu seçer.
-   - `custom`: `topic` alanındaki özel konuyu kullanır.
-5. Süre, ses ve görsel modunu seçip workflow'u başlat.
-6. İş bitince run sayfasının altındaki **Artifacts** bölümünden `neosaniye-<konu-slug>` paketini indir.
+4. `random` ile kategori havuzundan konu seçtir veya `custom` ile özel konu yaz.
+5. Süre, ses, görsel ve arka plan modunu seç.
+6. Run tamamlanınca **Artifacts** bölümünden `neosaniye-<konu-slug>` paketini indir.
+
+## V2'de değişenler
+
+### Sahne kilitli ses
+
+Artık tek uzun anlatım sesi kullanılmaz. Her sahne kendi `voiceLine` metnine sahiptir:
+
+1. Her `voiceLine` ayrı Edge Neural TTS dosyasına çevrilir.
+2. TTS, yalnızca ait olduğu sahnenin ses penceresine sığdırılır.
+3. Ses sahne başlangıcına milisaniye hassasiyetinde yerleştirilir.
+4. `scene-timing.json` gerçek TTS süresini, hız oranını ve sahnedeki konumunu kaydeder.
+5. QC, sesin sahne sınırını aşması veya aşırı hızlandırılması durumunda üretimi durdurur.
+
+### Arka plan sesi
+
+Eski sürekli synth/pad müzik motoru kaldırıldı.
+
+- `off`: varsayılan; arka plan müziği yoktur.
+- `soft-documentary`: melodisiz, çok düşük seviyeli kağıt/oda dokusu kullanır.
+
+SFX yalnızca 2-6 anlamlı sahnede kullanılır. Anlatıcı her zaman ön plandadır.
+
+### Belgesel kolaj motoru
+
+V2 sahneleri şu detayları kullanır:
+
+- yırtık kağıt ve arşiv kartları
+- halftone ve film dokusu
+- bant, raptiye ve kırmızı bağlantı ipleri
+- dossier etiketleri ve kaynak şeritleri
+- sahneye bağlı 2-5 görsel beat
+- harita çizimi, mekanizma, biyoloji, portre dosyası, arşiv duvarı gibi konuya özel çizim aileleri
+- paper tear, dossier slide, film burn, split shutter, match zoom ve ink wipe geçişleri
+- ana obje orta/üst bölgede; alt alan rastgele ikonlarla doldurulmaz
 
 ## Workflow ne yapıyor?
 
 1. Konu seçimi
-2. Wikipedia özetleriyle hızlı araştırma
-3. Pollinations metin modeliyle senaryo ve 14-18 sahnelik plan
-4. Netflix/Wayfinder tarzı prosedürel SVG-kolaj çizimleri
-5. İsteğe bağlı 4 veya 8 Pollinations AI görsel katmanı
-6. Edge Neural TTS ile doğal Türkçe/İngilizce anlatım
-7. Konuya ve sahne sınırlarına göre prosedürel belgesel müziği
-8. Yalnızca anlamlı noktalarda 3-7 SFX
-9. Remotion ile 1080x1920 Full HD render
+2. Wikipedia özetleriyle araştırma
+3. Konuya özel hook ve 14-18 sahne
+4. Her sahne için `voiceLine`, somut objeler ve görsel beat üretimi
+5. Prosedürel SVG-kolaj çizimleri
+6. İsteğe bağlı AI görsel katmanları
+7. Sahne bazlı doğal Neural TTS
+8. Kontrollü SFX ve isteğe bağlı soft ambience
+9. Remotion ile 1080x1920 render
 10. 720x1280 mobil önizleme
-11. Ses yüksekliği masterı, süre/çözünürlük/tempo/SFX kalite kontrolü
-12. Full HD, mobil, plan, ses masterı, contact sheet ve üretim raporunu ZIP paketine koyma
+11. Ses/görsel senkronu, süre, loudness, geçiş ve çizim çeşitliliği QC
+12. Full HD, mobil, ses masterı, scene timing, contact sheet ve rapor içeren ZIP
 
 ## Gerekli ayar
 
 Repository > **Settings > Secrets and variables > Actions > Secrets** bölümüne:
 
-- `POLLINATIONS_API_KEY`: AI senaryo planı ve hibrit görseller için.
+- `POLLINATIONS_API_KEY`: konuya özel AI planı ve hibrit görseller için.
 
-Anahtar yoksa workflow durmaz; deterministik güvenli plan ve tamamen prosedürel çizimlerle video üretir. `strict_ai=true` seçilirse AI planı üretilemediğinde workflow durur.
+Anahtar yoksa sistem kategori ve Wikipedia verisine göre konu uyumlu fallback üretir. `strict_ai=true` seçilirse AI planı üretilemediğinde workflow durur.
 
 İsteğe bağlı repository variables:
 
@@ -43,21 +75,24 @@ Anahtar yoksa workflow durmaz; deterministik güvenli plan ve tamamen prosedüre
 
 ## Görsel modları
 
-- `procedural`: yalnızca Remotion/SVG çizimleri; en hızlı ve en ucuz.
-- `hybrid`: 4 AI görseli + prosedürel çizimler; varsayılan.
-- `ai-heavy`: 8 AI görseli + prosedürel çizimler; daha yavaş.
+- `procedural`: yalnızca Remotion/SVG çizimleri.
+- `hybrid`: 4 AI katmanı + prosedürel çizimler.
+- `ai-heavy`: 8 AI katmanı + prosedürel çizimler.
 
 ## Kalite kuralları
 
 - 38-55 saniye
 - 14-18 sahne
-- İlk hook en fazla 3 saniye
-- Normal sahneler en fazla 3,35 saniye
-- Final en az 3,6 saniye
+- İlk hook en fazla 3,05 saniye
+- Normal sahneler en fazla 3,55 saniye
+- Final en az 3,65 saniye
+- Her sahnede ayrı voiceLine
+- Her sahnede 2-5 görsel beat
+- Ses sahne sınırları içinde kalmalı
+- TTS gerekli hızlandırma oranı 1,42x üzerine çıkmamalı
+- En az 4 geçiş, 5 çizim ailesi ve 4 yerleşim tipi
 - Kalıcı alt altyazı yok
-- Ana obje orta/üst bölgede; alt alan rastgele ikonlarla doldurulmaz
-- Konuşmada müzik otomatik kısılır
-- Çıkış: H.264, 1080x1920 ve ayrıca mobil MP4
+- Full HD ve mobil çıkış süreleri hedefle kilitli
 
 ## Çıktı
 
@@ -70,3 +105,4 @@ Artifact içinde:
 - `plan.json`
 - `manifest.json`
 - `audio-master.wav`
+- `scene-timing.json`
