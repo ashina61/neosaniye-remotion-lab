@@ -1,0 +1,81 @@
+name: Render Hormuz Crisis V5
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/hormuz-crisis/**'
+      - 'scripts/generate-hormuz-audio.py'
+      - 'package.json'
+      - '.github/workflows/render-hormuz-v5.yml'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npm install --no-audit --no-fund
+          python -m pip install --disable-pip-version-check edge-tts
+
+      - name: Generate narration score and restrained SFX
+        run: npm run hormuz:audio
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Render full quality MP4
+        run: npm run render:hormuz
+
+      - name: Create mobile preview
+        run: |
+          ffmpeg -y -i out/hormuz-crisis-v5.mp4 \
+            -vf scale=720:1280:flags=lanczos \
+            -c:v libx264 -profile:v main -level 3.1 -preset fast -crf 23 \
+            -pix_fmt yuv420p -r 30 \
+            -c:a aac -b:a 128k -ar 44100 -ac 2 \
+            -movflags +faststart out/hormuz-crisis-v5-mobile.mp4
+
+      - name: Validate output and ending
+        run: |
+          test -s out/hormuz-crisis-v5.mp4
+          test -s out/hormuz-crisis-v5-mobile.mp4
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v5.mp4)
+          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v5.mp4)
+          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v5.mp4)
+          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v5.mp4)
+          MOBILE_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v5-mobile.mp4)
+          echo "duration=$DURATION mobile=$MOBILE_DURATION width=$WIDTH height=$HEIGHT audio=$AUDIO"
+          awk "BEGIN {exit !($DURATION > 49.8 && $DURATION < 50.3)}"
+          awk "BEGIN {exit !($MOBILE_DURATION > 49.8 && $MOBILE_DURATION < 50.3)}"
+          test "$WIDTH" = "1080"
+          test "$HEIGHT" = "1920"
+          test -n "$AUDIO"
+
+      - name: Upload Hormuz V5 reel
+        uses: actions/upload-artifact@v4
+        with:
+          name: hormuz-crisis-v5-reel
+          path: |
+            out/hormuz-crisis-v5.mp4
+            out/hormuz-crisis-v5-mobile.mp4
+            public/hormuz-crisis/audio/*
+            public/hormuz-crisis/sfx/*
+            docs/hormuz-v5-source-notes.md
+          retention-days: 7
