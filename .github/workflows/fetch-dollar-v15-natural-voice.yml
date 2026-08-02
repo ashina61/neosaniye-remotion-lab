@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - '.github/workflows/fetch-dollar-v15-natural-voice.yml'
-      - 'docs/fetch-dollar-v15-natural-voice.md'
 
 jobs:
   fetch:
@@ -17,7 +16,7 @@ jobs:
             'https://resource2.heygen.ai/text_to_speech/48f0581c8a8c497bb4c555eee4d87d10/7f6838b1b0f141deba891800621a4fe8/id=6473d6c4-3c3a-4662-9808-2ad8c5bba74a.wav' \
             -o dollar-v15-natural-voice.wav
           test -s dollar-v15-natural-voice.wav
-          ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 dollar-v15-natural-voice.wav
+          ls -lh dollar-v15-natural-voice.wav
 
       - name: Upload narration
         uses: actions/upload-artifact@v4
