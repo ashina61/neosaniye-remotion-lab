@@ -1,0 +1,209 @@
+name: NeoSaniye Auto Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic_mode:
+        description: Konu nasıl seçilsin?
+        required: true
+        default: random
+        type: choice
+        options: [random, custom]
+      topic:
+        description: Özel konu (topic_mode=custom ise)
+        required: false
+        type: string
+      category:
+        description: Rastgele konu kategorisi
+        required: true
+        default: any
+        type: choice
+        options: [any, history, science, economy, geopolitics, technology, mystery, nature]
+      duration:
+        description: Hedef süre
+        required: true
+        default: '46'
+        type: choice
+        options: ['42', '46', '50']
+      language:
+        description: Anlatım dili
+        required: true
+        default: tr
+        type: choice
+        options: [tr, en]
+      voice:
+        description: Doğal neural ses
+        required: true
+        default: tr-TR-AhmetNeural
+        type: choice
+        options: [tr-TR-AhmetNeural, tr-TR-EmelNeural, en-US-GuyNeural, en-US-JennyNeural]
+      visual_mode:
+        description: Görsel üretim modu
+        required: true
+        default: hybrid
+        type: choice
+        options: [procedural, hybrid, ai-heavy]
+      research_mode:
+        description: Araştırma kaynağı
+        required: true
+        default: wikipedia
+        type: choice
+        options: [wikipedia, none]
+      strict_ai:
+        description: AI planı üretilemezse workflow dursun mu?
+        required: true
+        default: false
+        type: boolean
+      seed:
+        description: Aynı sonucu tekrarlamak için sayı; boş bırakılabilir
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - 'src/auto-factory/**'
+      - 'scripts/auto-factory/**'
+      - 'config/auto-factory-topics.json'
+      - 'public/auto-factory/plan.json'
+      - '.github/workflows/auto-short-factory.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-factory-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  produce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      TOPIC_MODE: ${{ inputs.topic_mode || 'random' }}
+      TOPIC: ${{ inputs.topic || '' }}
+      CATEGORY: ${{ inputs.category || 'any' }}
+      TARGET_DURATION: ${{ inputs.duration || '46' }}
+      LANGUAGE: ${{ inputs.language || 'tr' }}
+      VOICE: ${{ inputs.voice || 'tr-TR-AhmetNeural' }}
+      VISUAL_MODE: ${{ inputs.visual_mode || 'hybrid' }}
+      RESEARCH_MODE: ${{ inputs.research_mode || 'wikipedia' }}
+      STRICT_AI: ${{ inputs.strict_ai || 'false' }}
+      SEED: ${{ inputs.seed || github.run_number }}
+      POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+      POLLINATIONS_TEXT_MODEL: ${{ vars.POLLINATIONS_TEXT_MODEL || 'openai-fast' }}
+      POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL || 'zimage' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core zip
+
+      - name: Install Node dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install natural TTS
+        run: python -m pip install --disable-pip-version-check edge-tts
+
+      - name: Select topic, research and build production plan
+        id: plan
+        run: npm run auto:plan
+
+      - name: Generate optional AI image layers
+        run: npm run auto:images
+
+      - name: Generate neural narration, documentary music and SFX
+        run: npm run auto:audio
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Render Full HD Remotion video
+        run: npm run render:auto
+
+      - name: Master Shorts loudness
+        run: |
+          ffmpeg -y -i out/auto-factory-fullhd.mp4 \
+            -c:v copy \
+            -af loudnorm=I=-15.5:TP=-1.5:LRA=8 \
+            -c:a aac -b:a 192k -ar 48000 -ac 2 \
+            -movflags +faststart out/auto-factory-mastered.mp4
+          mv out/auto-factory-mastered.mp4 out/auto-factory-fullhd.mp4
+
+      - name: Render mobile preview
+        run: |
+          ffmpeg -y -i out/auto-factory-fullhd.mp4 \
+            -vf scale=720:1280:flags=lanczos \
+            -c:v libx264 -profile:v main -level 3.1 -preset fast -crf 23 \
+            -pix_fmt yuv420p -r 30 \
+            -c:a aac -b:a 128k -ar 48000 -ac 2 \
+            -movflags +faststart out/auto-factory-mobile.mp4
+
+      - name: Build review contact sheet
+        run: |
+          mkdir -p out/review
+          ffmpeg -y -i out/auto-factory-fullhd.mp4 \
+            -vf "fps=1/5.5,scale=270:-1,tile=2x4" \
+            -frames:v 1 out/review/contact.jpg
+
+      - name: Quality control
+        run: npm run auto:qc
+
+      - name: Build downloadable package
+        run: |
+          SLUG='${{ steps.plan.outputs.slug }}'
+          mkdir -p "out/package/$SLUG"
+          cp out/auto-factory-fullhd.mp4 "out/package/$SLUG/$SLUG-fullhd.mp4"
+          cp out/auto-factory-mobile.mp4 "out/package/$SLUG/$SLUG-mobile.mp4"
+          cp out/production-report.json "out/package/$SLUG/production-report.json"
+          cp out/review/contact.jpg "out/package/$SLUG/contact.jpg"
+          cp public/auto-factory/plan.json "out/package/$SLUG/plan.json"
+          cp public/auto-factory/manifest.json "out/package/$SLUG/manifest.json"
+          cp public/auto-factory/audio/final.wav "out/package/$SLUG/audio-master.wav"
+          cd out/package && zip -qr "../$SLUG-package.zip" "$SLUG"
+
+      - name: Write Actions summary
+        run: |
+          SLUG='${{ steps.plan.outputs.slug }}'
+          TOPIC='${{ steps.plan.outputs.topic }}'
+          {
+            echo "# NeoSaniye Auto Factory"
+            echo ""
+            echo "**Konu:** $TOPIC"
+            echo ""
+            echo "**Süre:** ${{ steps.plan.outputs.duration }} saniye"
+            echo ""
+            echo "**Sahne:** ${{ steps.plan.outputs.scene_count }}"
+            echo ""
+            echo "Artifact: \`neosaniye-$SLUG\`"
+            echo ""
+            echo "Paketin içinde mobil, Full HD, plan, ses masterı, contact sheet ve kalite raporu var."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload completed video factory artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neosaniye-${{ steps.plan.outputs.slug }}
+          path: |
+            out/${{ steps.plan.outputs.slug }}-package.zip
+            out/auto-factory-fullhd.mp4
+            out/auto-factory-mobile.mp4
+            out/production-report.json
+            out/review/contact.jpg
+            public/auto-factory/plan.json
+            public/auto-factory/manifest.json
+          retention-days: 7
