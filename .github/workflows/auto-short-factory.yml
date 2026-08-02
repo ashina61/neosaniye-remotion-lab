@@ -1,4 +1,4 @@
-name: NeoSaniye Auto Factory
+name: NeoSaniye Auto Factory V2
 
 on:
   workflow_dispatch:
@@ -43,6 +43,12 @@ on:
         default: hybrid
         type: choice
         options: [procedural, hybrid, ai-heavy]
+      music_mode:
+        description: Arka plan sesi (eski synth müzik tamamen kaldırıldı)
+        required: true
+        default: off
+        type: choice
+        options: [off, soft-documentary]
       research_mode:
         description: Araştırma kaynağı
         required: true
@@ -71,13 +77,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: auto-factory-${{ github.ref }}-${{ github.run_id }}
+  group: auto-factory-v2-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
   produce:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 55
     env:
       TOPIC_MODE: ${{ inputs.topic_mode || 'random' }}
       TOPIC: ${{ inputs.topic || '' }}
@@ -85,7 +91,9 @@ jobs:
       TARGET_DURATION: ${{ inputs.duration || '46' }}
       LANGUAGE: ${{ inputs.language || 'tr' }}
       VOICE: ${{ inputs.voice || 'tr-TR-AhmetNeural' }}
+      VOICE_RATE: '+5%'
       VISUAL_MODE: ${{ inputs.visual_mode || 'hybrid' }}
+      MUSIC_MODE: ${{ inputs.music_mode || 'off' }}
       RESEARCH_MODE: ${{ inputs.research_mode || 'wikipedia' }}
       STRICT_AI: ${{ inputs.strict_ai || 'false' }}
       SEED: ${{ inputs.seed || github.run_number }}
@@ -118,29 +126,31 @@ jobs:
       - name: Install natural TTS
         run: python -m pip install --disable-pip-version-check edge-tts
 
-      - name: Select topic, research and build production plan
+      - name: Select topic, research and build scene-locked plan
         id: plan
         run: npm run auto:plan
 
       - name: Generate optional AI image layers
         run: npm run auto:images
 
-      - name: Generate neural narration, documentary music and SFX
+      - name: Generate scene-locked neural narration and restrained SFX
         run: npm run auto:audio
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Render Full HD Remotion video
+      - name: Render Full HD Remotion documentary
         run: npm run render:auto
 
-      - name: Master Shorts loudness
+      - name: Lock final duration and master narration
         run: |
           ffmpeg -y -i out/auto-factory-fullhd.mp4 \
+            -map 0:v:0 -map 0:a:0 \
             -c:v copy \
-            -af loudnorm=I=-15.5:TP=-1.5:LRA=8 \
+            -af "loudnorm=I=-15.5:TP=-1.5:LRA=7,apad,atrim=0:${TARGET_DURATION}" \
             -c:a aac -b:a 192k -ar 48000 -ac 2 \
-            -movflags +faststart out/auto-factory-mastered.mp4
+            -t "${TARGET_DURATION}" -movflags +faststart \
+            out/auto-factory-mastered.mp4
           mv out/auto-factory-mastered.mp4 out/auto-factory-fullhd.mp4
 
       - name: Render mobile preview
@@ -150,16 +160,16 @@ jobs:
             -c:v libx264 -profile:v main -level 3.1 -preset fast -crf 23 \
             -pix_fmt yuv420p -r 30 \
             -c:a aac -b:a 128k -ar 48000 -ac 2 \
-            -movflags +faststart out/auto-factory-mobile.mp4
+            -t "${TARGET_DURATION}" -movflags +faststart out/auto-factory-mobile.mp4
 
       - name: Build review contact sheet
         run: |
           mkdir -p out/review
           ffmpeg -y -i out/auto-factory-fullhd.mp4 \
-            -vf "fps=1/5.5,scale=270:-1,tile=2x4" \
+            -vf "fps=1/5.6,scale=270:-1,tile=2x4" \
             -frames:v 1 out/review/contact.jpg
 
-      - name: Quality control
+      - name: Quality control and sync validation
         run: npm run auto:qc
 
       - name: Build downloadable package
@@ -173,6 +183,7 @@ jobs:
           cp public/auto-factory/plan.json "out/package/$SLUG/plan.json"
           cp public/auto-factory/manifest.json "out/package/$SLUG/manifest.json"
           cp public/auto-factory/audio/final.wav "out/package/$SLUG/audio-master.wav"
+          cp public/auto-factory/audio/scene-timing.json "out/package/$SLUG/scene-timing.json"
           cd out/package && zip -qr "../$SLUG-package.zip" "$SLUG"
 
       - name: Write Actions summary
@@ -180,7 +191,7 @@ jobs:
           SLUG='${{ steps.plan.outputs.slug }}'
           TOPIC='${{ steps.plan.outputs.topic }}'
           {
-            echo "# NeoSaniye Auto Factory"
+            echo "# NeoSaniye Auto Factory V2"
             echo ""
             echo "**Konu:** $TOPIC"
             echo ""
@@ -188,12 +199,14 @@ jobs:
             echo ""
             echo "**Sahne:** ${{ steps.plan.outputs.scene_count }}"
             echo ""
-            echo "Artifact: \`neosaniye-$SLUG\`"
+            echo "**Ses:** Sahne bazlı neural TTS — görselle kilitli"
             echo ""
-            echo "Paketin içinde mobil, Full HD, plan, ses masterı, contact sheet ve kalite raporu var."
+            echo "**Arka plan:** ${MUSIC_MODE}"
+            echo ""
+            echo "Artifact: \`neosaniye-$SLUG\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload completed video factory artifact
+      - name: Upload completed V2 artifact
         uses: actions/upload-artifact@v4
         with:
           name: neosaniye-${{ steps.plan.outputs.slug }}
@@ -205,4 +218,5 @@ jobs:
             out/review/contact.jpg
             public/auto-factory/plan.json
             public/auto-factory/manifest.json
+            public/auto-factory/audio/scene-timing.json
           retention-days: 7
