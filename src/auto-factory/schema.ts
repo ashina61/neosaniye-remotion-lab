@@ -12,7 +12,11 @@ export const VisualKindSchema = z.enum([
   'institution',
   'link-break',
   'mechanism',
-  'crowd'
+  'crowd',
+  'biology',
+  'portrait-dossier',
+  'object-exploded',
+  'archive-wall'
 ]);
 
 export const LayoutSchema = z.enum([
@@ -21,12 +25,47 @@ export const LayoutSchema = z.enum([
   'split-right',
   'diagonal',
   'overhead',
-  'stacked'
+  'stacked',
+  'dossier',
+  'macro'
 ]);
 
-export const TransitionSchema = z.enum(['paper-swipe', 'flash-cut', 'zoom-through', 'ink-wipe']);
-export const MotionSchema = z.enum(['push', 'orbit', 'drift', 'stamp', 'draw', 'cascade']);
-export const SfxSchema = z.enum(['impact', 'paper', 'stamp', 'click', 'crack', 'pulse', 'whoosh', 'none']);
+export const TransitionSchema = z.enum([
+  'paper-tear',
+  'dossier-slide',
+  'film-burn',
+  'split-shutter',
+  'match-zoom',
+  'ink-wipe'
+]);
+
+export const MotionSchema = z.enum([
+  'push',
+  'orbit',
+  'drift',
+  'stamp',
+  'draw',
+  'cascade',
+  'parallax',
+  'rack-focus'
+]);
+
+export const SfxSchema = z.enum([
+  'impact',
+  'paper',
+  'stamp',
+  'click',
+  'crack',
+  'pulse',
+  'whoosh',
+  'none'
+]);
+
+export const VisualBeatSchema = z.object({
+  at: z.number().min(0).max(1),
+  label: z.string().min(1).max(42),
+  action: z.enum(['reveal', 'connect', 'focus', 'stamp', 'swap', 'highlight'])
+});
 
 export const ScenePlanSchema = z.object({
   id: z.number().int().positive(),
@@ -34,19 +73,25 @@ export const ScenePlanSchema = z.object({
   duration: z.number().positive(),
   title: z.string().min(1).max(60),
   kicker: z.string().max(80),
+  voiceLine: z.string().max(260).default(''),
+  voiceStart: z.number().min(0).max(1.2).default(0.12),
+  voiceEndPadding: z.number().min(0.08).max(0.8).default(0.24),
   visualKind: VisualKindSchema,
   layout: LayoutSchema,
   transition: TransitionSchema,
   motion: MotionSchema,
   sfx: SfxSchema,
   accent: z.enum(['red', 'teal', 'gold', 'blue']),
-  props: z.array(z.string().min(1).max(28)).min(2).max(6),
+  props: z.array(z.string().min(1).max(32)).min(2).max(6),
+  beats: z.array(VisualBeatSchema).min(2).max(5).default([]),
+  detailLevel: z.number().int().min(1).max(3).default(2),
   imagePrompt: z.string().min(20),
+  sourceNote: z.string().max(160).optional(),
   asset: z.string().optional()
 });
 
 export const FactoryPlanSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   topic: z.string().min(2),
   slug: z.string().min(2),
   title: z.string().min(2),
@@ -56,7 +101,8 @@ export const FactoryPlanSchema = z.object({
   duration: z.number().min(38).max(55),
   fps: z.literal(30),
   seed: z.number().int().nonnegative(),
-  narration: z.string().min(120),
+  narration: z.string().min(80),
+  musicMode: z.enum(['off', 'soft-documentary']).default('off'),
   palette: z.object({
     paper: z.string(),
     ink: z.string(),
@@ -72,3 +118,4 @@ export const FactoryPlanSchema = z.object({
 export type FactoryPlan = z.infer<typeof FactoryPlanSchema>;
 export type ScenePlan = z.infer<typeof ScenePlanSchema>;
 export type VisualKind = z.infer<typeof VisualKindSchema>;
+export type VisualBeat = z.infer<typeof VisualBeatSchema>;
