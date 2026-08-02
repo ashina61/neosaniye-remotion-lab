@@ -85,10 +85,12 @@ const RawPlanSchema = z.object({
   narration:z.string().min(120),
   scenes:z.array(RawSceneSchema).min(10)
 });
+type RawScene = z.infer<typeof RawSceneSchema>;
+type RawPlan = z.infer<typeof RawPlanSchema>;
 
 const extractJson = (raw:string) => JSON.parse(raw.trim().replace(/^```json\s*/i,'').replace(/```$/i,'').trim());
 
-const generateWithAi = async () => {
+const generateWithAi = async (): Promise<RawPlan | undefined> => {
   if (!apiKey) return undefined;
   const facts = research.length ? research.map((item,index)=>`SOURCE ${index+1}: ${item.title}\n${item.excerpt}`).join('\n\n') : 'No external source excerpt was available. Avoid precise unstable claims and keep wording cautious.';
   const prompt = `You are the director of NeoSaniye, a fast Turkish vertical documentary Shorts channel. Build a complete plan about: ${topic}.
@@ -131,11 +133,11 @@ Exactly ${sceneCount} scenes. Make consecutive scenes visually different.`;
 
 const fallbackKinds = VisualKindSchema.options;
 const fallbackTitles = ['ŞAŞIRTICI GERÇEK','ESKİ DÜZEN','İLK KIRILMA','DENGE DEĞİŞİYOR','SİSTEM KURULUYOR','HIZLI YAYILIM','KRİTİK BAĞ','BÜYÜK KOPUŞ','NEDEN ÇÖKMEDİ','GÖRÜNMEYEN AĞ','KÜRESEL ETKİ','BUGÜNKÜ SONUÇ','ASIL SEBEP','SON PARÇA','CEVAP'];
-const fallbackPlan = () => ({
+const fallbackPlan = (): RawPlan => ({
   title:topic,
   hook:`${topic}: herkesin gözden kaçırdığı kırılma neydi?`,
   narration:`${topic}, tek bir olayla açıklanamayacak kadar büyük bir hikâye taşıyor. Önce eski düzenin nasıl çalıştığını anlamak gerekiyor. Ardından küçük görünen bir karar, dengeyi değiştirdi. Yeni sistem yayıldıkça ülkeler, kurumlar ve insanlar aynı ağın parçası oldu. Bir noktada eski bağlantı koptu fakat düzen çökmedi. Çünkü alışkanlıklar, ticaret yolları ve kurumlar yeni merkezi çoktan güçlendirmişti. Bugünkü sonucu yaratan şey yalnızca güç değil, herkesin aynı sistemi kullanmaya devam etmesiydi.`,
-  scenes:Array.from({length:sceneCount},(_,index)=>({
+  scenes:Array.from({length:sceneCount},(_,index): RawScene=>({
     title:fallbackTitles[index%fallbackTitles.length],
     kicker:index===0?topic:index===sceneCount-1?'HİKÂYENİN CEVABI':`ADIM ${index+1}`,
     visualKind:fallbackKinds[index%fallbackKinds.length],
@@ -149,7 +151,7 @@ const fallbackPlan = () => ({
   }))
 });
 
-let rawPlan;
+let rawPlan: RawPlan | undefined;
 try {
   rawPlan = await generateWithAi();
   if (rawPlan) console.log('AI ile konuya özel plan üretildi.');
@@ -159,7 +161,7 @@ try {
 }
 rawPlan ??= fallbackPlan();
 
-const selectedScenes = Array.from({length:sceneCount},(_,index)=>rawPlan.scenes[index%rawPlan.scenes.length]);
+const selectedScenes: RawScene[] = Array.from({length:sceneCount},(_,index)=>rawPlan.scenes[index%rawPlan.scenes.length]);
 const hookDuration = duration <= 42 ? 2.45 : 2.6;
 const finalDuration = duration >= 50 ? 4.5 : 4.1;
 const middleDuration = (duration-hookDuration-finalDuration)/(sceneCount-2);
@@ -173,7 +175,7 @@ const scenes = selectedScenes.map((scene,index)=>{
     duration:Number(sceneDuration.toFixed(3)),
     title:scene.title.toLocaleUpperCase(language==='tr'?'tr-TR':'en-US').slice(0,60),
     kicker:scene.kicker.toLocaleUpperCase(language==='tr'?'tr-TR':'en-US').slice(0,80),
-    props:scene.props.map(value=>value.toLocaleUpperCase(language==='tr'?'tr-TR':'en-US').slice(0,28)).slice(0,6)
+    props:scene.props.map((value:string)=>value.toLocaleUpperCase(language==='tr'?'tr-TR':'en-US').slice(0,28)).slice(0,6)
   };
   cursor += sceneDuration;
   return normalized;
