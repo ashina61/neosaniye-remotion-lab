@@ -45,6 +45,16 @@ jobs:
       - name: Render Full HD
         run: npm run render:dollar:v16
 
+      - name: Master Shorts loudness
+        run: |
+          ffmpeg -y -i out/dollar-v16-fullhd.mp4 \
+            -map 0:v:0 -map 0:a:0 \
+            -c:v copy \
+            -af "loudnorm=I=-16:TP=-1.5:LRA=7,alimiter=limit=0.94" \
+            -c:a aac -b:a 192k -ar 48000 -ac 2 \
+            -movflags +faststart out/dollar-v16-fullhd-mastered.mp4
+          mv out/dollar-v16-fullhd-mastered.mp4 out/dollar-v16-fullhd.mp4
+
       - name: Render mobile preview
         run: |
           ffmpeg -y -i out/dollar-v16-fullhd.mp4 \
@@ -58,7 +68,7 @@ jobs:
         run: |
           mkdir -p out/review
           ffmpeg -y -i out/dollar-v16-fullhd.mp4 \
-            -vf "select='eq(n,30)+eq(n,150)+eq(n,300)+eq(n,450)+eq(n,600)+eq(n,780)+eq(n,990)+eq(n,1230)',scale=270:-1,tile=2x4" \
+            -vf "select='eq(n,30)+eq(n,150)+eq(n,300)+eq(n,450)+eq(n,600)+eq(n,840)+eq(n,990)+eq(n,1230)',scale=270:-1,tile=2x4" \
             -frames:v 1 out/review/dollar-v16-contact.jpg
 
       - name: Validate output
@@ -79,6 +89,7 @@ jobs:
           test "$HEIGHT" = "1920"
           test -n "$AUDIO"
           test "$SAMPLE_RATE" = "48000"
+          ffmpeg -hide_banner -i out/dollar-v16-fullhd.mp4 -filter_complex ebur128=peak=true -f null - 2>&1 | tail -n 18
 
       - name: Upload Dollar V16 reel
         uses: actions/upload-artifact@v4
