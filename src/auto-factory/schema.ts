@@ -86,7 +86,7 @@ export const ScenePlanSchema = z.object({
   sfx: SfxSchema,
   accent: z.enum(['red', 'teal', 'gold', 'blue']),
   props: z.array(z.string().min(1).max(32)).min(2).max(6),
-  beats: z.array(VisualBeatSchema).min(2).max(5).default([]),
+  beats: z.array(VisualBeatSchema).max(5).default([]),
   detailLevel: z.number().int().min(1).max(3).default(2),
   imagePrompt: z.string().min(20),
   sourceNote: z.string().max(160).optional(),
