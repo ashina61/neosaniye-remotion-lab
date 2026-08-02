@@ -36,7 +36,10 @@ export const TransitionSchema = z.enum([
   'film-burn',
   'split-shutter',
   'match-zoom',
-  'ink-wipe'
+  'ink-wipe',
+  'paper-swipe',
+  'flash-cut',
+  'zoom-through'
 ]);
 
 export const MotionSchema = z.enum([
