@@ -5,7 +5,7 @@ import {HORMUZ_TOTAL_FRAMES} from './data';
 
 export const HormuzRoot: React.FC = () => (
   <Composition
-    id="HormuzCrisisV5"
+    id="HormuzCrisisV6"
     component={HormuzCrisisShort}
     durationInFrames={HORMUZ_TOTAL_FRAMES}
     fps={30}
