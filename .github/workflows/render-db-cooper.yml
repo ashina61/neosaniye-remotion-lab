@@ -1,0 +1,31 @@
+name: Render D.B. Cooper Layered Reel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - name: Generate separate placeholder layers
+        run: npm run db:assets
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Render 1080x1920 MP4
+        run: npm run render:db
+      - name: Validate
+        run: test -s out/db-cooper.mp4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-cooper-layered-reel
+          path: |
+            out/db-cooper.mp4
+            public/db-cooper/asset-manifest.json
+            public/db-cooper/scene-*/*
+          retention-days: 7
