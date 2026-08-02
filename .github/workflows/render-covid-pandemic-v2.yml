@@ -1,4 +1,4 @@
-name: Render Covid Pandemic V2
+name: Render Covid Pandemic V3
 
 on:
   workflow_dispatch:
@@ -34,7 +34,7 @@ jobs:
           npm install --no-audit --no-fund
           python -m pip install --disable-pip-version-check edge-tts
 
-      - name: Generate natural narration restrained SFX and resolved score
+      - name: Generate narration restrained SFX and extended score
         run: npm run covid:audio
 
       - name: Typecheck
@@ -45,23 +45,23 @@ jobs:
 
       - name: Validate output and ending
         run: |
-          test -s out/covid-pandemic-v2.mp4
-          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
-          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
-          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
-          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
+          test -s out/covid-pandemic-v3.mp4
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v3.mp4)
+          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v3.mp4)
+          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v3.mp4)
+          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v3.mp4)
           echo "duration=$DURATION width=$WIDTH height=$HEIGHT audio=$AUDIO"
-          awk "BEGIN {exit !($DURATION > 44.8 && $DURATION < 45.3)}"
+          awk "BEGIN {exit !($DURATION > 49.8 && $DURATION < 50.3)}"
           test "$WIDTH" = "1080"
           test "$HEIGHT" = "1920"
           test -n "$AUDIO"
 
-      - name: Upload Covid V2 reel
+      - name: Upload Covid V3 reel
         uses: actions/upload-artifact@v4
         with:
-          name: covid-pandemic-v2-reel
+          name: covid-pandemic-v3-reel
           path: |
-            out/covid-pandemic-v2.mp4
+            out/covid-pandemic-v3.mp4
             public/covid-pandemic/audio/*
             public/covid-pandemic/sfx/*
           retention-days: 7

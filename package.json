@@ -21,7 +21,7 @@
     "render:db": "remotion render src/db-cooper/index.ts DBCooperShort out/db-cooper-v2.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p",
     "render:fu": "remotion render src/first-university/index.ts FirstUniversityShort out/first-university.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "render:ic": "remotion render src/istanbul-conquest/index.ts IstanbulConquestShort out/istanbul-conquest-v2.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
-    "render:covid": "remotion render src/covid-pandemic/index.ts CovidPandemicV2 out/covid-pandemic-v2.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
+    "render:covid": "remotion render src/covid-pandemic/index.ts CovidPandemicV2 out/covid-pandemic-v3.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
