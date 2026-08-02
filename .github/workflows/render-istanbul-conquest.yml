@@ -1,0 +1,68 @@
+name: Render Istanbul Conquest Reel V2
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/istanbul-conquest/**'
+      - 'scripts/generate-istanbul-conquest-audio.py'
+      - 'package.json'
+      - '.github/workflows/render-istanbul-conquest.yml'
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npm install --no-audit --no-fund
+          python -m pip install --disable-pip-version-check edge-tts
+
+      - name: Generate narration score and restrained SFX
+        run: npm run ic:audio
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Render high quality 1080x1920 MP4
+        run: npm run render:ic
+
+      - name: Validate duration picture audio and final tail
+        run: |
+          test -s out/istanbul-conquest-v2.mp4
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 out/istanbul-conquest-v2.mp4 | head -n 1 | tr -d ',\r')
+          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=nw=1:nk=1 out/istanbul-conquest-v2.mp4 | head -n 1 | tr -d ',\r')
+          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=nw=1:nk=1 out/istanbul-conquest-v2.mp4 | head -n 1 | tr -d ',\r')
+          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 out/istanbul-conquest-v2.mp4 | head -n 1 | tr -d ',\r')
+          echo "duration=$DURATION width=$WIDTH height=$HEIGHT audio=$AUDIO"
+          awk "BEGIN {exit !($DURATION > 44.9 && $DURATION < 45.2)}"
+          test "$WIDTH" = "1080"
+          test "$HEIGHT" = "1920"
+          test -n "$AUDIO"
+          ffmpeg -v error -sseof -1.5 -i out/istanbul-conquest-v2.mp4 -map 0:a:0 -af volumedetect -f null - 2> final-tail.txt || true
+          cat final-tail.txt
+
+      - name: Upload rendered reel
+        uses: actions/upload-artifact@v4
+        with:
+          name: istanbul-conquest-reel-v2
+          path: |
+            out/istanbul-conquest-v2.mp4
+            public/istanbul-conquest/audio-manifest.json
+          retention-days: 7
