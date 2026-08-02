@@ -1,13 +1,15 @@
 {
   "name": "neosaniye-remotion-lab",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "storyboard": "tsx scripts/generate-storyboard.ts",
     "images": "tsx scripts/generate-images.ts",
+    "db:assets": "tsx scripts/generate-db-cooper-assets.ts",
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts NeoSaniyeShort out/video.mp4",
+    "render:db": "remotion render src/index.ts DBCooperShort out/db-cooper.mp4 --codec=h264",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
