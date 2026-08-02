@@ -26,7 +26,7 @@ export const COVID_SCENES = [
   },
   {
     id: 6,
-    duration: 240,
+    duration: 390,
     line: "Pandemi, kayıpların yanında çalışma, eğitim ve sağlık sistemlerini de değiştirdi. Geriye bilim, hazırlık ve dayanışma dersi kaldı.",
   },
 ] as const;
