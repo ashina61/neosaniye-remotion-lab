@@ -1,0 +1,105 @@
+name: Render Dollar V16
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/dollar-v16/**'
+      - 'scripts/generate-dollar-v16-audio.py'
+      - 'package.json'
+      - '.github/workflows/render-dollar-v16.yml'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Node dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate natural narration, score and SFX
+        run: npm run dollar:v16:audio
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Render Full HD
+        run: npm run render:dollar:v16
+
+      - name: Master Shorts loudness
+        run: |
+          ffmpeg -y -i out/dollar-v16-fullhd.mp4 \
+            -map 0:v:0 -map 0:a:0 \
+            -c:v copy \
+            -af "loudnorm=I=-16:TP=-1.5:LRA=7,alimiter=limit=0.94" \
+            -c:a aac -b:a 192k -ar 48000 -ac 2 \
+            -movflags +faststart out/dollar-v16-fullhd-mastered.mp4
+          mv out/dollar-v16-fullhd-mastered.mp4 out/dollar-v16-fullhd.mp4
+
+      - name: Render mobile preview
+        run: |
+          ffmpeg -y -i out/dollar-v16-fullhd.mp4 \
+            -vf scale=720:1280:flags=lanczos \
+            -c:v libx264 -profile:v main -level 3.1 -preset fast -crf 23 \
+            -pix_fmt yuv420p -r 30 \
+            -c:a aac -b:a 128k -ar 48000 -ac 2 \
+            -movflags +faststart out/dollar-v16-mobile.mp4
+
+      - name: Build review contact sheet
+        run: |
+          mkdir -p out/review
+          ffmpeg -y -i out/dollar-v16-fullhd.mp4 \
+            -vf "select='eq(n,30)+eq(n,150)+eq(n,300)+eq(n,450)+eq(n,600)+eq(n,840)+eq(n,990)+eq(n,1230)',scale=270:-1,tile=2x4" \
+            -frames:v 1 out/review/dollar-v16-contact.jpg
+
+      - name: Validate output
+        run: |
+          test -s out/dollar-v16-fullhd.mp4
+          test -s out/dollar-v16-mobile.mp4
+          test -s public/dollar-v16/audio/final.wav
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/dollar-v16-fullhd.mp4)
+          MOBILE_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/dollar-v16-mobile.mp4)
+          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 out/dollar-v16-fullhd.mp4)
+          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 out/dollar-v16-fullhd.mp4)
+          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 out/dollar-v16-fullhd.mp4)
+          SAMPLE_RATE=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 out/dollar-v16-fullhd.mp4)
+          echo "duration=$DURATION mobile=$MOBILE_DURATION width=$WIDTH height=$HEIGHT audio=$AUDIO sample_rate=$SAMPLE_RATE"
+          awk "BEGIN {exit !($DURATION > 46.3 && $DURATION < 46.7)}"
+          awk "BEGIN {exit !($MOBILE_DURATION > 46.3 && $MOBILE_DURATION < 46.7)}"
+          test "$WIDTH" = "1080"
+          test "$HEIGHT" = "1920"
+          test -n "$AUDIO"
+          test "$SAMPLE_RATE" = "48000"
+          ffmpeg -hide_banner -i out/dollar-v16-fullhd.mp4 -filter_complex ebur128=peak=true -f null - 2>&1 | tail -n 18
+
+      - name: Upload Dollar V16 reel
+        uses: actions/upload-artifact@v4
+        with:
+          name: dollar-v16-reel
+          path: |
+            out/dollar-v16-fullhd.mp4
+            out/dollar-v16-mobile.mp4
+            out/review/dollar-v16-contact.jpg
+            public/dollar-v16/audio/final.wav
+            public/dollar-v16/audio/music.wav
+            public/dollar-v16/audio/sfx.wav
+          retention-days: 7
