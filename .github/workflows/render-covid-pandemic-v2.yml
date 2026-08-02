@@ -46,10 +46,10 @@ jobs:
       - name: Validate output and ending
         run: |
           test -s out/covid-pandemic-v2.mp4
-          DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 out/covid-pandemic-v2.mp4)
-          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 out/covid-pandemic-v2.mp4)
-          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 out/covid-pandemic-v2.mp4)
-          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 out/covid-pandemic-v2.mp4)
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
+          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
+          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
+          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 out/covid-pandemic-v2.mp4)
           echo "duration=$DURATION width=$WIDTH height=$HEIGHT audio=$AUDIO"
           awk "BEGIN {exit !($DURATION > 44.8 && $DURATION < 45.3)}"
           test "$WIDTH" = "1080"
