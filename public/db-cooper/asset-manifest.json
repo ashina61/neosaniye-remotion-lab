@@ -1,0 +1,13 @@
+{
+  "project": "D.B. Cooper — Netflix Practice Kit method",
+  "rule": "Every visual element is an independent transparent layer. Generate or replace one file at a time; never generate the whole scene as one image.",
+  "styleBible": "1971 archival documentary collage, distressed newspaper halftone, cream-black-dark-red palette, torn paper edges, realistic period detail, flat editorial lighting, consistent 35mm lens perspective",
+  "scenes": [
+    {"scene": 1, "signature": "museum-frame zoom-through", "layers": ["wall", "airport-photo", "cooper-portrait", "gold-frame", "cloud-1", "cloud-2"]},
+    {"scene": 2, "signature": "opposing prop hands + smoke + negative flicker", "layers": ["cabin", "cooper-seated", "hand-note", "briefcase", "smoke"]},
+    {"scene": 3, "signature": "three newspaper drops on desk", "layers": ["desk", "paper-bomb", "paper-ransom", "paper-parachutes"]},
+    {"scene": 4, "signature": "grounded parallax punch and jump", "layers": ["storm", "forest", "plane-rear", "cooper-jump"]},
+    {"scene": 5, "signature": "layered office, drawn lamp light, cash flicker, focus hunt", "layers": ["office-bg", "office-char", "office-desk", "office-cash", "lamp"]},
+    {"scene": 6, "signature": "scene-4 clone reskinned as FBI mystery board", "layers": ["fbi-wall", "cooper-sketch", "red-question"]}
+  ]
+}
