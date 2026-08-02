@@ -1,4 +1,4 @@
-name: Render Hormuz Crisis V6
+name: Render Hormuz Crisis V8
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,8 +34,18 @@ jobs:
           npm install --no-audit --no-fund
           python -m pip install --disable-pip-version-check edge-tts
 
-      - name: Generate narration score and restrained SFX
+      - name: Generate continuous narration, score and restrained SFX
         run: npm run hormuz:audio
+
+      - name: Validate audio masters
+        run: |
+          test -s public/hormuz-crisis/audio/narration-master-v8.wav
+          test -s public/hormuz-crisis/audio/score-v8.wav
+          NARRATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 public/hormuz-crisis/audio/narration-master-v8.wav)
+          SCORE=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 public/hormuz-crisis/audio/score-v8.wav)
+          echo "narration=$NARRATION score=$SCORE"
+          awk "BEGIN {exit !($NARRATION > 48.7 && $NARRATION < 50.2)}"
+          awk "BEGIN {exit !($SCORE > 49.8 && $SCORE < 50.2)}"
 
       - name: Typecheck
         run: npm run typecheck
@@ -45,22 +55,22 @@ jobs:
 
       - name: Create mobile preview
         run: |
-          ffmpeg -y -i out/hormuz-crisis-v6.mp4 \
+          ffmpeg -y -i out/hormuz-crisis-v8.mp4 \
             -vf scale=720:1280:flags=lanczos \
-            -c:v libx264 -profile:v main -level 3.1 -preset fast -crf 23 \
+            -c:v libx264 -profile:v main -level 3.1 -preset fast -crf 22 \
             -pix_fmt yuv420p -r 30 \
             -c:a aac -b:a 128k -ar 44100 -ac 2 \
-            -movflags +faststart out/hormuz-crisis-v6-mobile.mp4
+            -movflags +faststart out/hormuz-crisis-v8-mobile.mp4
 
       - name: Validate output and ending
         run: |
-          test -s out/hormuz-crisis-v6.mp4
-          test -s out/hormuz-crisis-v6-mobile.mp4
-          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v6.mp4)
-          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v6.mp4)
-          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v6.mp4)
-          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v6.mp4)
-          MOBILE_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v6-mobile.mp4)
+          test -s out/hormuz-crisis-v8.mp4
+          test -s out/hormuz-crisis-v8-mobile.mp4
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v8.mp4)
+          WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v8.mp4)
+          HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v8.mp4)
+          AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v8.mp4)
+          MOBILE_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 out/hormuz-crisis-v8-mobile.mp4)
           echo "duration=$DURATION mobile=$MOBILE_DURATION width=$WIDTH height=$HEIGHT audio=$AUDIO"
           awk "BEGIN {exit !($DURATION > 49.8 && $DURATION < 50.3)}"
           awk "BEGIN {exit !($MOBILE_DURATION > 49.8 && $MOBILE_DURATION < 50.3)}"
@@ -68,14 +78,15 @@ jobs:
           test "$HEIGHT" = "1920"
           test -n "$AUDIO"
 
-      - name: Upload Hormuz V6 reel
+      - name: Upload Hormuz V8 reel
         uses: actions/upload-artifact@v4
         with:
-          name: hormuz-crisis-v6-reel
+          name: hormuz-crisis-v8-reel
           path: |
-            out/hormuz-crisis-v6.mp4
-            out/hormuz-crisis-v6-mobile.mp4
-            public/hormuz-crisis/audio/*
+            out/hormuz-crisis-v8.mp4
+            out/hormuz-crisis-v8-mobile.mp4
+            public/hormuz-crisis/audio/narration-master-v8.wav
+            public/hormuz-crisis/audio/score-v8.wav
             public/hormuz-crisis/sfx/*
             docs/hormuz-v5-source-notes.md
           retention-days: 7

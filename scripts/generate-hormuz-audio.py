@@ -14,6 +14,11 @@ SFX.mkdir(parents=True, exist_ok=True)
 
 FPS = 30
 SCENE_FRAMES = [225, 225, 240, 240, 240, 330]
+SCENE_SECONDS = [frames / FPS for frames in SCENE_FRAMES]
+SCENE_STARTS = [0.0]
+for duration in SCENE_SECONDS[:-1]:
+    SCENE_STARTS.append(SCENE_STARTS[-1] + duration)
+
 LINES = [
     "12 Temmuz'da İran Devrim Muhafızları, Hürmüz Boğazı'nı ikinci bir duyuruya kadar kapattığını açıkladı.",
     "İran ile Umman arasındaki bu dar geçit, Basra Körfezi'ni Umman Körfezi ve açık denizlere bağlar.",
@@ -28,31 +33,123 @@ def run(*args: str) -> None:
     subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-async def narration() -> None:
+def duration_of(path: Path) -> float:
+    output = subprocess.check_output(
+        [
+            'ffprobe',
+            '-v',
+            'error',
+            '-show_entries',
+            'format=duration',
+            '-of',
+            'default=noprint_wrappers=1:nokey=1',
+            str(path),
+        ],
+        text=True,
+    )
+    return float(output.strip())
+
+
+async def narration_master() -> None:
     voice = 'tr-TR-AhmetNeural'
-    for index, (line, frames) in enumerate(zip(LINES, SCENE_FRAMES), start=1):
-        mp3 = AUDIO / f'scene-{index:02d}.mp3'
-        wav = AUDIO / f'scene-{index:02d}.wav'
-        duration = frames / FPS
+    clips: list[Path] = []
+
+    for index, (line, scene_duration) in enumerate(
+        zip(LINES, SCENE_SECONDS),
+        start=1,
+    ):
+        mp3 = AUDIO / f'v8-line-{index:02d}.mp3'
+        wav = AUDIO / f'v8-line-{index:02d}.wav'
         await edge_tts.Communicate(
             line,
             voice=voice,
-            rate='+8%',
+            rate='+9%',
             pitch='-3Hz',
         ).save(str(mp3))
-        fade_start = max(0.5, duration - 0.45)
+
+        raw_duration = duration_of(mp3)
+        max_duration = scene_duration - (0.78 if index < 6 else 1.35)
+        speed = max(1.0, raw_duration / max_duration)
+        output_duration = raw_duration / speed
+        fade_out_start = max(0.25, output_duration - 0.14)
+
+        filters = [
+            'highpass=f=72',
+            'lowpass=f=11200',
+            'volume=1.08',
+        ]
+        if speed > 1.001:
+            filters.append(f'atempo={speed:.5f}')
+        filters.extend(
+            [
+                'afade=t=in:st=0:d=0.035',
+                f'afade=t=out:st={fade_out_start:.4f}:d=0.14',
+            ],
+        )
+
         run(
-            'ffmpeg', '-y', '-i', str(mp3),
+            'ffmpeg',
+            '-y',
+            '-i',
+            str(mp3),
             '-af',
-            f'adelay=280|280,volume=1.1,highpass=f=72,lowpass=f=11200,afade=t=out:st={fade_start}:d=0.35,apad=pad_dur={duration}',
-            '-t', f'{duration:.3f}', '-ar', '44100', '-ac', '2', str(wav),
+            ','.join(filters),
+            '-ar',
+            '44100',
+            '-ac',
+            '2',
+            str(wav),
         )
         mp3.unlink(missing_ok=True)
+        clips.append(wav)
+
+    command = ['ffmpeg', '-y']
+    for clip in clips:
+        command.extend(['-i', str(clip)])
+
+    filter_parts: list[str] = []
+    labels: list[str] = []
+    for index, start in enumerate(SCENE_STARTS):
+        delay_ms = int((start + 0.30) * 1000)
+        label = f'n{index}'
+        filter_parts.append(
+            f'[{index}:a]adelay={delay_ms}|{delay_ms}[{label}]',
+        )
+        labels.append(f'[{label}]')
+
+    filter_parts.append(
+        ''.join(labels)
+        + f'amix=inputs={len(labels)}:duration=longest:normalize=0,'
+        + 'acompressor=threshold=-18dB:ratio=1.8:attack=18:release=220,'
+        + 'alimiter=limit=0.94[narration]',
+    )
+
+    command.extend(
+        [
+            '-filter_complex',
+            ';'.join(filter_parts),
+            '-map',
+            '[narration]',
+            '-t',
+            f'{sum(SCENE_SECONDS):.3f}',
+            '-ar',
+            '44100',
+            '-ac',
+            '2',
+            '-c:a',
+            'pcm_s16le',
+            str(AUDIO / 'narration-master-v8.wav'),
+        ],
+    )
+    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    for clip in clips:
+        clip.unlink(missing_ok=True)
 
 
 def write_wav(path: Path, samples: list[float], rate: int = 44100) -> None:
     peak = max(1e-6, max(abs(value) for value in samples))
-    scale = 0.88 / peak
+    scale = 0.86 / peak
     pcm = bytearray()
     for value in samples:
         sample = max(-1.0, min(1.0, value * scale))
@@ -66,20 +163,29 @@ def write_wav(path: Path, samples: list[float], rate: int = 44100) -> None:
         output.writeframes(bytes(pcm))
 
 
-def envelope(time: float, duration: float, attack: float = 0.08, release: float = 0.35) -> float:
-    return max(
-        0.0,
-        min(
-            1.0,
-            time / max(attack, 1e-6),
-            (duration - time) / max(release, 1e-6),
-        ),
-    )
+def edge_envelope(time: float, duration: float) -> float:
+    fade_in = min(1.0, time / 1.1)
+    fade_out = min(1.0, max(0.0, duration - time) / 2.0)
+    return max(0.0, min(fade_in, fade_out))
 
 
-def make_score() -> None:
+def chord_value(
+    frequencies: tuple[float, float, float],
+    time: float,
+    phase_seed: float,
+) -> float:
+    value = 0.0
+    for tone_index, frequency in enumerate(frequencies):
+        phase = phase_seed + tone_index * 0.82
+        value += math.sin(2 * math.pi * frequency * time + phase) * (
+            0.0155 / (tone_index + 1)
+        )
+    return value
+
+
+def make_score_v8() -> None:
     rate = 44100
-    duration = sum(SCENE_FRAMES) / FPS
+    duration = sum(SCENE_SECONDS)
     total = int(duration * rate)
     samples = [0.0] * total
     chords = [
@@ -90,35 +196,57 @@ def make_score() -> None:
         (73.42, 110.0, 164.81),
         (82.41, 123.47, 174.61),
     ]
-    scene_starts = [0.0]
-    for frames in SCENE_FRAMES[:-1]:
-        scene_starts.append(scene_starts[-1] + frames / FPS)
+    transition = 1.25
 
-    for scene_index, (start, frames) in enumerate(zip(scene_starts, SCENE_FRAMES)):
-        scene_duration = frames / FPS
-        begin = int(start * rate)
-        end = min(total, int((start + scene_duration) * rate))
-        frequencies = chords[scene_index]
-        for sample_index in range(begin, end):
-            local = (sample_index - begin) / rate
-            value = 0.0
-            for tone_index, frequency in enumerate(frequencies):
-                phase = tone_index * 0.82
-                value += math.sin(2 * math.pi * frequency * local + phase) * (0.017 / (tone_index + 1))
-            value += math.sin(2 * math.pi * 41.2 * local) * 0.008
-            slow_pulse = max(0.0, math.sin(2 * math.pi * 0.105 * local)) ** 9
-            value += math.sin(2 * math.pi * 247 * local) * slow_pulse * 0.0045
-            distant_sonar = max(0.0, math.sin(2 * math.pi * 0.055 * local - 1.2)) ** 18
-            value += math.sin(2 * math.pi * 392 * local) * distant_sonar * 0.0035
-            samples[sample_index] += value * envelope(local, scene_duration, 0.9, 1.2)
-
-    fade_start = duration - 5.5
     for sample_index in range(total):
         time = sample_index / rate
-        if time > fade_start:
-            samples[sample_index] *= max(0.0, (duration - time) / (duration - fade_start)) ** 1.5
+        scene_index = len(SCENE_STARTS) - 1
+        for index, start in enumerate(SCENE_STARTS):
+            if index + 1 < len(SCENE_STARTS) and time < SCENE_STARTS[index + 1]:
+                scene_index = index
+                break
 
-    write_wav(AUDIO / 'score.wav', samples, rate)
+        current = chord_value(chords[scene_index], time, scene_index * 0.47)
+        value = current
+
+        if scene_index + 1 < len(chords):
+            boundary = SCENE_STARTS[scene_index + 1]
+            blend_start = boundary - transition
+            if time >= blend_start:
+                blend = max(0.0, min(1.0, (time - blend_start) / transition))
+                blend = blend * blend * (3 - 2 * blend)
+                next_value = chord_value(
+                    chords[scene_index + 1],
+                    time,
+                    (scene_index + 1) * 0.47,
+                )
+                value = current * (1 - blend) + next_value * blend
+
+        value += math.sin(2 * math.pi * 41.2 * time) * 0.007
+        value += math.sin(2 * math.pi * 0.085 * time) * 0.003
+        sea_pulse = max(0.0, math.sin(2 * math.pi * 0.09 * time - 0.4)) ** 10
+        value += math.sin(2 * math.pi * 247 * time) * sea_pulse * 0.0038
+        sonar = max(0.0, math.sin(2 * math.pi * 0.052 * time - 1.1)) ** 20
+        value += math.sin(2 * math.pi * 392 * time) * sonar * 0.0028
+        samples[sample_index] = value * edge_envelope(time, duration)
+
+    write_wav(AUDIO / 'score-v8.wav', samples, rate)
+
+
+def envelope(
+    time: float,
+    duration: float,
+    attack: float = 0.08,
+    release: float = 0.35,
+) -> float:
+    return max(
+        0.0,
+        min(
+            1.0,
+            time / max(attack, 1e-6),
+            (duration - time) / max(release, 1e-6),
+        ),
+    )
 
 
 def make_sfx() -> None:
@@ -133,11 +261,23 @@ def make_sfx() -> None:
 
     def radio_alert(time: float, duration: float) -> float:
         value = 0.0
-        for start, frequency, amp in [(0.03, 1260, 0.16), (0.22, 980, 0.12), (0.46, 1260, 0.1)]:
+        for start, frequency, amp in [
+            (0.03, 1260, 0.13),
+            (0.22, 980, 0.09),
+            (0.46, 1260, 0.075),
+        ]:
             local = time - start
             if 0 <= local <= 0.11:
-                value += math.sin(2 * math.pi * frequency * local) * envelope(local, 0.11, 0.004, 0.05) * amp
-        value += math.sin(2 * math.pi * 58 * time) * envelope(time, duration, 0.01, 0.22) * 0.06
+                value += (
+                    math.sin(2 * math.pi * frequency * local)
+                    * envelope(local, 0.11, 0.004, 0.05)
+                    * amp
+                )
+        value += (
+            math.sin(2 * math.pi * 58 * time)
+            * envelope(time, duration, 0.01, 0.22)
+            * 0.045
+        )
         return value
 
     render('radio-alert.wav', 0.78, radio_alert)
@@ -146,26 +286,28 @@ def make_sfx() -> None:
         'ship-horn.wav',
         2.1,
         lambda t, d: (
-            math.sin(2 * math.pi * 91 * t) * 0.18
-            + math.sin(2 * math.pi * 137 * t) * 0.09
-            + math.sin(2 * math.pi * 182 * t) * 0.04
-        ) * envelope(t, d, 0.22, 0.8),
+            math.sin(2 * math.pi * 91 * t) * 0.14
+            + math.sin(2 * math.pi * 137 * t) * 0.07
+            + math.sin(2 * math.pi * 182 * t) * 0.03
+        )
+        * envelope(t, d, 0.22, 0.85),
     )
 
     render(
         'gate-lock.wav',
         0.9,
         lambda t, d: (
-            math.sin(2 * math.pi * (93 - 45 * t) * t) * 0.24
-            + math.sin(2 * math.pi * 37 * t) * 0.13
-            + math.sin(2 * math.pi * 620 * t) * (0.09 if t < 0.07 else 0.0)
-        ) * envelope(t, d, 0.008, 0.42),
+            math.sin(2 * math.pi * (93 - 45 * t) * t) * 0.19
+            + math.sin(2 * math.pi * 37 * t) * 0.09
+            + math.sin(2 * math.pi * 620 * t) * (0.06 if t < 0.07 else 0.0)
+        )
+        * envelope(t, d, 0.008, 0.42),
     )
 
 
 async def main() -> None:
-    await narration()
-    make_score()
+    await narration_master()
+    make_score_v8()
     make_sfx()
 
 
