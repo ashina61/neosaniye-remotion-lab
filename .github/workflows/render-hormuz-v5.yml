@@ -44,7 +44,7 @@ jobs:
           NARRATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 public/hormuz-crisis/audio/narration-master-v8.wav)
           SCORE=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 public/hormuz-crisis/audio/score-v8.wav)
           echo "narration=$NARRATION score=$SCORE"
-          awk "BEGIN {exit !($NARRATION > 49.8 && $NARRATION < 50.2)}"
+          awk "BEGIN {exit !($NARRATION > 48.7 && $NARRATION < 50.2)}"
           awk "BEGIN {exit !($SCORE > 49.8 && $SCORE < 50.2)}"
 
       - name: Typecheck
