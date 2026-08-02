@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "topic": "Dolar nasıl küresel ticaret parası oldu",
+  "slug": "dolar-nasil-kuresel-ticaret-parasi-oldu",
+  "title": "Doların Küresel Gücü",
+  "hook": "Dolar neden dünyanın ortak parası oldu?",
+  "category": "economy",
+  "language": "tr",
+  "duration": 46,
+  "fps": 30,
+  "seed": 61,
+  "narration": "Doların küresel gücü bir gecede oluşmadı. Önce altın standardı ve sterlin dünyaya yön verdi. İkinci Dünya Savaşı sonrasında Amerika büyük üretim gücü ve altın rezerviyle öne çıktı. Bretton Woods sistemi doları altına bağladı ve ülkeler rezervlerini dolar üzerinden tutmaya başladı. Sonraki yıllarda ticaret, petrol, bankalar ve Amerikan tahvilleri aynı para etrafında birleşti. Bin dokuz yüz yetmiş birde altın bağı koptu ama sistem çökmemişti. Çünkü dünya ticareti çoktan dolara bağlanmıştı.",
+  "palette": {
+    "paper": "#e4d5b5",
+    "ink": "#27221d",
+    "red": "#963631",
+    "teal": "#42666b",
+    "gold": "#ba974e",
+    "blue": "#526f9d"
+  },
+  "research": [],
+  "scenes": [
+    {"id":1,"start":0,"duration":2.6,"title":"DOLAR NEDEN MERKEZDE?","kicker":"ALTIN · SAVAŞ · PETROL","visualKind":"world-network","layout":"hero","transition":"flash-cut","motion":"cascade","sfx":"impact","accent":"red","props":["DOLAR","ALTIN","PETROL","TİCARET"],"imagePrompt":"Vertical editorial documentary collage showing a US dollar at the center of global trade routes, gold bars and oil tankers, layered paper textures, no readable text"},
+    {"id":2,"start":2.6,"duration":2.8,"title":"ESKİ DÜZEN","kicker":"STERLİN VE ALTIN","visualKind":"currency","layout":"split-left","transition":"paper-swipe","motion":"drift","sfx":"paper","accent":"gold","props":["STERLİN","ALTIN STANDARDI","LONDRA"],"imagePrompt":"Victorian finance and gold standard editorial collage, pound sterling, gold vault and London trade, vertical 9:16, no text"},
+    {"id":3,"start":5.4,"duration":2.8,"title":"SAVAŞ DENGESİ","kicker":"ABD ÜRETİM GÜCÜ","visualKind":"factory","layout":"diagonal","transition":"zoom-through","motion":"push","sfx":"whoosh","accent":"blue","props":["FABRİKA","GEMİ","ALTIN REZERVİ"],"imagePrompt":"World War Two era American factories, cargo ships and gold reserves in cinematic paper collage, vertical 9:16, no text"},
+    {"id":4,"start":8.2,"duration":2.8,"title":"1944","kicker":"BRETTON WOODS","visualKind":"treaty-table","layout":"overhead","transition":"flash-cut","motion":"stamp","sfx":"stamp","accent":"red","props":["44 ÜLKE","ANLAŞMA","DOLAR"],"imagePrompt":"1944 Bretton Woods conference table, documents, delegates and dollar-gold agreement, archival collage, vertical, no text"},
+    {"id":5,"start":11,"duration":2.8,"title":"DOLAR ↔ ALTIN","kicker":"SABİT BAĞ","visualKind":"mechanism","layout":"stacked","transition":"ink-wipe","motion":"draw","sfx":"click","accent":"gold","props":["35 DOLAR","1 ONS","ALTIN"],"imagePrompt":"Mechanical editorial illustration connecting dollar notes to gold bars with gears and chain, vertical 9:16, no text"},
+    {"id":6,"start":13.8,"duration":2.8,"title":"DOLAR YAYILIYOR","kicker":"MARSHALL PLANI","visualKind":"map-route","layout":"split-right","transition":"paper-swipe","motion":"cascade","sfx":"paper","accent":"teal","props":["AVRUPA","YARDIM","TİCARET"],"imagePrompt":"Postwar Marshall Plan trade routes from America to Europe, cargo and dollar flows, documentary collage, vertical, no text"},
+    {"id":7,"start":16.6,"duration":2.8,"title":"REZERV PARA","kicker":"MERKEZ BANKALARI","visualKind":"institution","layout":"hero","transition":"zoom-through","motion":"orbit","sfx":"pulse","accent":"blue","props":["REZERV","BANKA","TAHVİL"],"imagePrompt":"Central banks and reserve vaults linked by dollar flows, global financial network collage, vertical, no text"},
+    {"id":8,"start":19.4,"duration":2.8,"title":"1971 KIRILMASI","kicker":"ALTIN BAĞI KOPTU","visualKind":"link-break","layout":"diagonal","transition":"flash-cut","motion":"stamp","sfx":"crack","accent":"red","props":["NIXON","ZİNCİR","ALTIN"],"imagePrompt":"1971 Nixon shock represented by broken chain between dollar and gold, archival paper collage, vertical, no text"},
+    {"id":9,"start":22.2,"duration":2.8,"title":"AMA DOLAR KALDI","kicker":"SİSTEM ÇOKTAN KURULMUŞTU","visualKind":"world-network","layout":"split-left","transition":"ink-wipe","motion":"draw","sfx":"pulse","accent":"teal","props":["TİCARET","BORÇ","REZERV"],"imagePrompt":"World trade network remaining centered on dollar after gold link breaks, cinematic editorial collage, vertical, no text"},
+    {"id":10,"start":25,"duration":2.8,"title":"PETROL DOLARI","kicker":"ENERJİ TİCARETİ","visualKind":"commodity","layout":"hero","transition":"paper-swipe","motion":"push","sfx":"impact","accent":"gold","props":["PETROL","TANKER","DOLAR"],"imagePrompt":"Oil barrels, tanker and dollar settlement system, geopolitical documentary collage, vertical 9:16, no text"},
+    {"id":11,"start":27.8,"duration":2.8,"title":"BANKA AĞI","kicker":"ÖDEMELER VE KREDİLER","visualKind":"institution","layout":"split-right","transition":"zoom-through","motion":"cascade","sfx":"click","accent":"blue","props":["BANKA","KREDİ","ÖDEME"],"imagePrompt":"International bank payment network, terminals, ledgers and dollar flows, editorial collage, vertical, no text"},
+    {"id":12,"start":30.6,"duration":2.8,"title":"ABD TAHVİLLERİ","kicker":"DEV LİKİT PİYASA","visualKind":"document","layout":"overhead","transition":"flash-cut","motion":"stamp","sfx":"paper","accent":"teal","props":["TAHVİL","GÜVENLİ LİMAN","LİKİDİTE"],"imagePrompt":"US Treasury bond documents, global investors and liquidity, archival financial collage, vertical, no text"},
+    {"id":13,"start":33.4,"duration":2.8,"title":"AĞ ETKİSİ","kicker":"HERKES KULLANDIĞI İÇİN","visualKind":"mechanism","layout":"stacked","transition":"ink-wipe","motion":"orbit","sfx":"pulse","accent":"gold","props":["ŞİRKETLER","ÜLKELER","BANKALAR"],"imagePrompt":"Network effect of companies countries and banks using dollars, interconnected paper collage, vertical, no text"},
+    {"id":14,"start":36.2,"duration":2.8,"title":"DOLARIN GÜCÜ","kicker":"SADECE AMERİKA DEĞİL","visualKind":"currency","layout":"diagonal","transition":"paper-swipe","motion":"drift","sfx":"whoosh","accent":"red","props":["GÜVEN","DERİNLİK","ALIŞKANLIK"],"imagePrompt":"Dollar strength represented by trust market depth and habit, bold editorial finance collage, vertical, no text"},
+    {"id":15,"start":39,"duration":2.8,"title":"DÜNYA BAĞLANDI","kicker":"TİCARETİN ORTAK DİLİ","visualKind":"map-route","layout":"hero","transition":"zoom-through","motion":"draw","sfx":"pulse","accent":"teal","props":["ROTALAR","MERKEZ","DOLAR"],"imagePrompt":"Global shipping and finance routes converging on the dollar, detailed documentary map collage, vertical, no text"},
+    {"id":16,"start":41.8,"duration":4.2,"title":"SONUÇ","kicker":"DOLAR GÜÇLÜ ÇÜNKÜ DÜNYA ONA BAĞLANDI","visualKind":"world-network","layout":"hero","transition":"flash-cut","motion":"cascade","sfx":"impact","accent":"gold","props":["TİCARET","PETROL","BANKALAR","TAHVİL"],"imagePrompt":"Final global trade network centered on dollar, oil banks bonds and ships connected, premium editorial collage, vertical, no text"}
+  ]
+}

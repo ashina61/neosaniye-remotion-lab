@@ -1,1 +1,72 @@
-{}
+{
+  "history": [
+    "Matbaanın dünyayı nasıl değiştirdiği",
+    "Roma İmparatorluğu neden ikiye bölündü",
+    "İpek Yolu nasıl çalışıyordu",
+    "Kara Veba Avrupa'yı nasıl değiştirdi",
+    "Berlin Duvarı neden inşa edildi",
+    "Süveyş Kanalı dünya ticaretini nasıl değiştirdi",
+    "Moğollar bu kadar hızlı nasıl yayıldı",
+    "Sanayi Devrimi neden İngiltere'de başladı"
+  ],
+  "science": [
+    "Dünya'nın çekirdeği neden sıcak kalıyor",
+    "Antibiyotik direnci nasıl oluşuyor",
+    "Kara delikler zamanı nasıl büküyor",
+    "İnsan beyni uykuda ne yapıyor",
+    "Aşılar bağışıklık sistemini nasıl eğitiyor",
+    "Depremler neden önceden kesin tahmin edilemiyor",
+    "DNA kendini nasıl kopyalıyor",
+    "Kuantum dolaşıklık ne anlama geliyor"
+  ],
+  "economy": [
+    "Enflasyon neden paranın değerini düşürür",
+    "Dolar nasıl küresel ticaret parası oldu",
+    "Merkez bankaları neden faiz artırır",
+    "Altın neden kriz dönemlerinde yükselir",
+    "Petrol fiyatı dünyayı nasıl etkiler",
+    "1929 Büyük Buhranı nasıl başladı",
+    "Bankalar mevduattan nasıl para yaratır",
+    "Bir ülke neden temerrüde düşer"
+  ],
+  "geopolitics": [
+    "Hürmüz Boğazı neden bu kadar önemli",
+    "Ukrayna ve Rusya savaşı nasıl başladı",
+    "Tayvan neden küresel çip üretiminin merkezinde",
+    "NATO neden kuruldu",
+    "Arktik bölgesi neden yeni rekabet alanı oldu",
+    "Güney Çin Denizi neden tartışmalı",
+    "Kuzey Kore nasıl nükleer güç oldu",
+    "Boğazlar dünya siyasetini nasıl etkiliyor"
+  ],
+  "technology": [
+    "İnternet paketleri dünyayı nasıl dolaşıyor",
+    "GPS konumumuzu nasıl hesaplıyor",
+    "Yapay zekâ görüntüleri nasıl üretiyor",
+    "Transistör modern dünyayı nasıl kurdu",
+    "Çip üretmek neden bu kadar zor",
+    "QR kod nasıl çalışıyor",
+    "Bulut bilişim aslında nerede çalışıyor",
+    "Lityum iyon bataryalar enerjiyi nasıl depoluyor"
+  ],
+  "mystery": [
+    "D.B. Cooper nasıl kayboldu",
+    "Voynich el yazması neden çözülemedi",
+    "Dyatlov Geçidi olayında ne oldu",
+    "Mary Celeste neden boş bulundu",
+    "Cicada 3301 neydi",
+    "Tunguska patlamasına ne sebep oldu",
+    "Antikythera mekanizması nasıl çalışıyordu",
+    "Roanoke kolonisi nereye kayboldu"
+  ],
+  "nature": [
+    "Arılar yönlerini nasıl buluyor",
+    "Ahtapotlar neden bu kadar zeki",
+    "Volkanik yıldırım nasıl oluşuyor",
+    "Balinalar okyanusta nasıl iletişim kuruyor",
+    "Karıncalar dev kolonileri nasıl yönetiyor",
+    "Kutup ışıkları nasıl oluşuyor",
+    "Çöller geceleri neden soğuk olur",
+    "Okyanus akıntıları iklimi nasıl değiştiriyor"
+  ]
+}

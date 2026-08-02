@@ -1,6 +1,6 @@
 {
   "name": "neosaniye-remotion-lab",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,10 @@
     "covid:audio": "python3 scripts/generate-covid-pandemic-audio.py",
     "hormuz:audio": "python3 scripts/generate-hormuz-audio.py",
     "dollar:v16:audio": "python3 scripts/generate-dollar-v16-audio.py",
+    "auto:plan": "tsx scripts/auto-factory/generate-plan.ts",
+    "auto:images": "tsx scripts/auto-factory/generate-images.ts",
+    "auto:audio": "python3 scripts/auto-factory/generate-audio.py",
+    "auto:qc": "python3 scripts/auto-factory/qc.py",
     "studio": "remotion studio src/index.ts",
     "studio:db": "remotion studio src/db-cooper/index.ts",
     "studio:fu": "remotion studio src/first-university/index.ts",
@@ -21,6 +25,7 @@
     "studio:covid": "remotion studio src/covid-pandemic/index.ts",
     "studio:hormuz": "remotion studio src/hormuz-crisis/index.ts",
     "studio:dollar:v16": "remotion studio src/dollar-v16/index.ts",
+    "studio:auto": "remotion studio src/auto-factory/index.ts",
     "render": "remotion render src/index.ts NeoSaniyeShort out/video.mp4",
     "render:db": "remotion render src/db-cooper/index.ts DBCooperShort out/db-cooper-v2.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p",
     "render:fu": "remotion render src/first-university/index.ts FirstUniversityShort out/first-university.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
@@ -28,6 +33,7 @@
     "render:covid": "remotion render src/covid-pandemic/index.ts CovidPandemicV2 out/covid-pandemic-v3.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "render:hormuz": "remotion render src/hormuz-crisis/index.ts HormuzCrisisV8 out/hormuz-crisis-v8.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "render:dollar:v16": "remotion render src/dollar-v16/index.ts DollarV16 out/dollar-v16-fullhd.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
+    "render:auto": "remotion render src/auto-factory/index.ts NeoSaniyeAuto out/auto-factory-fullhd.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
