@@ -72,28 +72,44 @@ export const PaperLabel: React.FC<{
   style?: React.CSSProperties;
   dark?: boolean;
   red?: boolean;
-}> = ({children, style, dark = false, red = false}) => (
-  <div
-    style={{
-      position: 'absolute',
-      padding: '12px 22px 10px',
-      background: dark ? '#27221c' : red ? '#8d2921' : '#e9ddbe',
-      color: dark || red ? '#f4ecd7' : '#2b241b',
-      fontFamily: 'Georgia, Times New Roman, serif',
-      fontWeight: 800,
-      fontSize: 42,
-      lineHeight: 1,
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-      boxShadow: '0 8px 16px rgba(38,25,15,.22)',
-      clipPath: 'polygon(1% 5%, 99% 0, 100% 92%, 2% 100%)',
-      whiteSpace: 'nowrap',
-      ...style,
-    }}
-  >
-    {children}
-  </div>
-);
+}> = ({children, style, dark = false, red = false}) => {
+  const textLength = typeof children === 'string' ? children.length : 0;
+  const squeeze = textLength > 27 ? 0.68 : textLength > 22 ? 0.77 : textLength > 18 ? 0.88 : 1;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        display: 'inline-block',
+        maxWidth: 920,
+        overflow: 'hidden',
+        padding: '12px 22px 10px',
+        background: dark ? '#27221c' : red ? '#8d2921' : '#e9ddbe',
+        color: dark || red ? '#f4ecd7' : '#2b241b',
+        fontFamily: 'Georgia, Times New Roman, serif',
+        fontWeight: 800,
+        fontSize: 42,
+        lineHeight: 1,
+        letterSpacing: 1.4,
+        textTransform: 'uppercase',
+        boxShadow: '0 8px 16px rgba(38,25,15,.22)',
+        clipPath: 'polygon(1% 5%, 99% 0, 100% 92%, 2% 100%)',
+        whiteSpace: 'nowrap',
+        ...style,
+      }}
+    >
+      <span
+        style={{
+          display: 'block',
+          transform: `scaleX(${squeeze})`,
+          transformOrigin: 'center center',
+        }}
+      >
+        {children}
+      </span>
+    </div>
+  );
+};
 
 export const Tape: React.FC<{style?: React.CSSProperties}> = ({style}) => (
   <div
