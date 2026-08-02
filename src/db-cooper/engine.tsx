@@ -9,13 +9,29 @@ import {
   useVideoConfig,
 } from 'remotion';
 
+const SceneTimeScaleContext = React.createContext(1);
+
+export const SceneTimeProvider: React.FC<
+  React.PropsWithChildren<{sourceFrames: number; targetFrames: number}>
+> = ({sourceFrames, targetFrames, children}) => (
+  <SceneTimeScaleContext.Provider value={sourceFrames / Math.max(1, targetFrames)}>
+    {children}
+  </SceneTimeScaleContext.Provider>
+);
+
 export const posterizeFrame = (frame: number, fps: number, targetFps = 12) => {
   const step = fps / targetFps;
   return Math.floor(frame / step) * step;
 };
 
-export const useSteppedFrame = (targetFps = 12) => {
+export const useSceneFrame = () => {
   const frame = useCurrentFrame();
+  const timeScale = React.useContext(SceneTimeScaleContext);
+  return frame * timeScale;
+};
+
+export const useSteppedFrame = (targetFps = 12) => {
+  const frame = useSceneFrame();
   const {fps} = useVideoConfig();
   return posterizeFrame(frame, fps, targetFps);
 };
@@ -62,13 +78,14 @@ export const PaperCaption: React.FC<{
       position: 'absolute',
       padding: '16px 26px 18px',
       color: dark ? '#1b1813' : '#f4eddd',
-      background: dark ? 'rgba(226,210,174,.94)' : 'rgba(18,15,12,.72)',
+      background: dark ? 'rgba(226,210,174,.94)' : 'rgba(18,15,12,.76)',
       fontFamily: 'Georgia, Times New Roman, serif',
       fontStyle: 'italic',
       fontWeight: 700,
       lineHeight: 1.02,
       letterSpacing: -1.2,
-      boxShadow: '0 18px 45px rgba(0,0,0,.28)',
+      boxShadow: '0 18px 45px rgba(0,0,0,.32)',
+      textShadow: dark ? 'none' : '0 3px 12px rgba(0,0,0,.7)',
       transform: 'rotate(-1.2deg)',
       ...style,
     }}
@@ -76,6 +93,39 @@ export const PaperCaption: React.FC<{
     {children}
   </div>
 );
+
+const AnimatedDust: React.FC = () => {
+  const frame = useSteppedFrame(12);
+  return (
+    <AbsoluteFill style={{pointerEvents: 'none', overflow: 'hidden', mixBlendMode: 'screen', opacity: 0.22}}>
+      {Array.from({length: 20}, (_, index) => {
+        const seed = (index * 73 + 29) % 997;
+        const left = (seed * 37) % 1080;
+        const baseY = (seed * 61) % 2100;
+        const speed = 0.28 + (index % 5) * 0.11;
+        const y = ((baseY - frame * speed + 2100) % 2100) - 90;
+        const size = 2 + (index % 4) * 1.4;
+        const drift = Math.sin(frame * 0.025 + index) * (8 + (index % 3) * 5);
+        return (
+          <div
+            key={index}
+            style={{
+              position: 'absolute',
+              left: left + drift,
+              top: y,
+              width: size,
+              height: size,
+              borderRadius: '50%',
+              background: index % 3 === 0 ? '#f4e5bd' : '#fff7df',
+              filter: `blur(${index % 2 ? 1.2 : 0.4}px)`,
+              opacity: 0.35 + (index % 5) * 0.08,
+            }}
+          />
+        );
+      })}
+    </AbsoluteFill>
+  );
+};
 
 export const FilmLook: React.FC<
   React.PropsWithChildren<{
@@ -90,25 +140,28 @@ export const FilmLook: React.FC<
   }>
 > = ({
   children,
-  saturate = 0.86,
-  contrast = 1.08,
-  sepia = 0.16,
-  brightness = 0.95,
+  saturate = 0.88,
+  contrast = 1.09,
+  sepia = 0.14,
+  brightness = 0.97,
   scanLines = true,
   texture = true,
   vignette = true,
   gateWeave = true,
 }) => {
   const frame = useSteppedFrame(12);
-  const jitterX = gateWeave ? Math.sin(frame * 0.91) * 2.5 : 0;
-  const jitterY = gateWeave ? Math.cos(frame * 0.67) * 2.5 : 0;
+  const jitterX = gateWeave ? Math.sin(frame * 0.91) * 1.8 : 0;
+  const jitterY = gateWeave ? Math.cos(frame * 0.67) * 1.8 : 0;
+  const flicker = Math.sin(frame * 1.37) * 0.008 + Math.cos(frame * 0.43) * 0.004;
+  const grainX = Math.sin(frame * 2.17) * 13;
+  const grainY = Math.cos(frame * 1.61) * 11;
 
   return (
     <AbsoluteFill style={{backgroundColor: '#0a0806', overflow: 'hidden'}}>
       <AbsoluteFill
         style={{
-          transform: `translate(${jitterX}px, ${jitterY}px) scale(${gateWeave ? 1.012 : 1})`,
-          filter: `saturate(${saturate}) contrast(${contrast}) sepia(${sepia}) brightness(${brightness})`,
+          transform: `translate(${jitterX}px, ${jitterY}px) scale(${gateWeave ? 1.009 : 1})`,
+          filter: `saturate(${saturate}) contrast(${contrast}) sepia(${sepia}) brightness(${brightness + flicker})`,
         }}
       >
         {children}
@@ -118,17 +171,28 @@ export const FilmLook: React.FC<
         <>
           <LayerImage
             src="db-cooper/textures/grain.svg"
-            style={{mixBlendMode: 'multiply', opacity: 0.55, filter: 'invert(1) brightness(1.35) contrast(1.02)'}}
+            style={{
+              mixBlendMode: 'multiply',
+              opacity: 0.34 + Math.sin(frame * 0.77) * 0.035,
+              filter: 'invert(1) brightness(1.36) contrast(1.04)',
+              transform: `translate(${grainX}px, ${grainY}px) scale(1.045) rotate(${Math.sin(frame * 0.31) * 0.25}deg)`,
+            }}
           />
-          <LayerImage src="db-cooper/textures/grunge.svg" style={{mixBlendMode: 'color-burn', opacity: 0.16}} />
+          <LayerImage
+            src="db-cooper/textures/grunge.svg"
+            style={{mixBlendMode: 'color-burn', opacity: 0.105, transform: `scale(1.02) translate(${-grainX * 0.18}px, ${grainY * 0.15}px)`}}
+          />
+          <AnimatedDust />
         </>
       ) : null}
 
       {scanLines ? (
         <AbsoluteFill
           style={{
-            background: 'repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 1.6px, transparent 1.6px 8px)',
-            filter: 'blur(.7px)',
+            background: 'repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 6px)',
+            opacity: 0.62,
+            filter: 'blur(.35px)',
+            mixBlendMode: 'multiply',
             pointerEvents: 'none',
           }}
         />
@@ -137,7 +201,7 @@ export const FilmLook: React.FC<
       {vignette ? (
         <AbsoluteFill
           style={{
-            background: 'radial-gradient(ellipse 92% 82% at 50% 48%, transparent 0 55%, rgba(0,0,0,.5) 100%)',
+            background: 'radial-gradient(ellipse 94% 86% at 50% 47%, transparent 0 57%, rgba(0,0,0,.46) 100%)',
             pointerEvents: 'none',
           }}
         />
