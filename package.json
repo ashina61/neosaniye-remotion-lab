@@ -1,6 +1,6 @@
 {
   "name": "neosaniye-remotion-lab",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,7 +24,7 @@
     "render:fu": "remotion render src/first-university/index.ts FirstUniversityShort out/first-university.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "render:ic": "remotion render src/istanbul-conquest/index.ts IstanbulConquestShort out/istanbul-conquest-v2.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "render:covid": "remotion render src/covid-pandemic/index.ts CovidPandemicV2 out/covid-pandemic-v3.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
-    "render:hormuz": "remotion render src/hormuz-crisis/index.ts HormuzCrisisV5 out/hormuz-crisis-v5.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
+    "render:hormuz": "remotion render src/hormuz-crisis/index.ts HormuzCrisisV6 out/hormuz-crisis-v6.mp4 --codec=h264 --crf=14 --audio-bitrate=192k --pixel-format=yuv420p --concurrency=2",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
