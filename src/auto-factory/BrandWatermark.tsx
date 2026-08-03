@@ -18,21 +18,20 @@ const logoDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(`
 
 export const BrandWatermark: React.FC = () => {
   const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 14], [0, 0.92], {extrapolateRight: 'clamp'});
-  const scale = interpolate(frame, [0, 18], [0.94, 1], {extrapolateRight: 'clamp'});
+  const opacity = interpolate(frame, [0, 12], [0, 0.9], {extrapolateRight: 'clamp'});
+  const scale = interpolate(frame, [0, 16], [0.96, 1], {extrapolateRight: 'clamp'});
   return (
     <div
       style={{
         position: 'absolute',
-        left: 48,
-        top: 54,
-        width: 230,
-        padding: '12px 14px 9px',
-        borderRadius: 22,
-        background: 'rgba(8,10,12,.62)',
-        border: '1px solid rgba(255,255,255,.14)',
-        boxShadow: '0 10px 30px rgba(0,0,0,.28)',
-        backdropFilter: 'blur(8px)',
+        left: 38,
+        top: 34,
+        width: 154,
+        padding: '6px 7px 4px',
+        borderRadius: 14,
+        background: 'rgba(4,6,8,.72)',
+        border: '1px solid rgba(255,255,255,.12)',
+        boxShadow: '0 7px 20px rgba(0,0,0,.24)',
         opacity,
         transform: `scale(${scale})`,
         transformOrigin: 'top left',
