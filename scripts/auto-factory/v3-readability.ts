@@ -43,7 +43,12 @@ const profile = String(plan.v3?.profile || plan.v3Profile || plan.v3_profile || 
 
 const buildScene = (base: Scene, voiceLine: string, overrides: Partial<Scene>): Scene => {
   const heroVisual = String(overrides.heroVisual || base.heroVisual || base.title || plan.topic);
-  const supportVisuals = ((overrides.supportVisuals as string[] | undefined) || base.supportVisuals || base.props || [heroVisual]).map(String).slice(0, 5);
+  const rawSupportVisuals: unknown[] =
+    (overrides.supportVisuals as unknown[] | undefined) ||
+    (Array.isArray(base.supportVisuals) ? base.supportVisuals : undefined) ||
+    (Array.isArray(base.props) ? base.props : undefined) ||
+    [heroVisual];
+  const supportVisuals: string[] = rawSupportVisuals.map((value: unknown) => String(value)).slice(0, 5);
   while (supportVisuals.length < 2) supportVisuals.push(heroVisual);
   const voice = sentence(voiceLine);
   return {
@@ -53,7 +58,7 @@ const buildScene = (base: Scene, voiceLine: string, overrides: Partial<Scene>): 
     sceneGoal: language === 'en' ? `Show exactly how: ${voice}` : `Tam olarak şunu göster: ${voice}`,
     heroVisual: compact(heroVisual, 54),
     supportVisuals,
-    props: supportVisuals.map((value) => compact(value.toLocaleUpperCase(locale), 18)).slice(0, 6),
+    props: supportVisuals.map((value: string) => compact(value.toLocaleUpperCase(locale), 18)).slice(0, 6),
     conceptTags: unique([...tokens(voice), ...tokens(heroVisual)]).slice(0, 10),
     beats: [
       {at: 0.08, label: compact(heroVisual, 42), action: 'reveal'},
