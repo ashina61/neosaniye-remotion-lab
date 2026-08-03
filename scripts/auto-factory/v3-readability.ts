@@ -52,7 +52,7 @@ const alignmentScore = (voiceLine: string, heroVisual: string, supportVisuals: s
 const mergeMetadata = (scenes: Scene[]) => ({
   supportVisuals: unique(scenes.flatMap((scene) => (scene.supportVisuals || []).map(String))).slice(0, 5),
   forbiddenTags: unique(scenes.flatMap((scene) => (scene.forbiddenTags || []).map(String))),
-  conceptTags: unique(scenes.flatMap((scene) => (scene.conceptTags || []).map(String))).slice(0, 12),
+  conceptTags: unique(scenes.flatMap((scene) => (scene.conceptTags || []).map(String))).slice(0, 10),
 });
 
 const buildScene = (
@@ -74,7 +74,7 @@ const buildScene = (
     supportVisuals,
     props: supportVisuals.map((value) => compactLabel(String(value).toLocaleUpperCase('tr-TR'), 14)).slice(0, 6),
     forbiddenTags: metadata.forbiddenTags,
-    conceptTags: unique([...metadata.conceptTags, ...tokens(sentence), ...tokens(heroVisual)]).slice(0, 12),
+    conceptTags: unique([...metadata.conceptTags, ...tokens(sentence), ...tokens(heroVisual)]).slice(0, 10),
     beats: [
       {at: 0.1, label: heroVisual, action: 'reveal'},
       {at: 0.3, label: supportVisuals[0] || heroVisual, action: 'focus'},
