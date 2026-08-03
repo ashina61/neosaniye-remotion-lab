@@ -57,10 +57,10 @@ def continuous_text() -> str:
         if not line:
             continue
         line = re.sub(r"\s+", " ", line)
-        line = re.sub(r"[.!?;:]+$", "", line)
+        line = re.sub(r"[,.!?;:]+", "", line)
         lines.append(line)
-    # Commas preserve one flowing take without the long resets produced by semicolons.
-    return ", ".join(lines) + "."
+    # Scene boundaries come from word timing, not punctuation pauses.
+    return " ".join(lines) + "."
 
 
 async def synthesize_continuous() -> tuple[Path, list[dict]]:
@@ -150,9 +150,9 @@ async def main() -> None:
     speed = raw_duration / target_voice
     if speed > 1.22:
         raise RuntimeError(f"Narration is too dense for V3 ({speed:.2f}x required)")
-    if speed < 0.78:
+    if speed < 0.74:
         raise RuntimeError(f"Narration is too short for continuous V3 pacing ({speed:.2f}x)")
-    speed = max(0.78, min(1.22, speed))
+    speed = max(0.74, min(1.22, speed))
 
     narration = OUT_DIR / "narration-continuous.wav"
     run(
