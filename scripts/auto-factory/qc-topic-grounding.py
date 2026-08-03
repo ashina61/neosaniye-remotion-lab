@@ -15,6 +15,7 @@ timing = json.loads(TIMING_PATH.read_text(encoding="utf-8"))
 report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 scenes = plan.get("scenes", [])
 profile = plan.get("topicProfile") or {}
+language = str(plan.get("language", "en"))
 
 
 def norm(value: object) -> str:
@@ -63,6 +64,9 @@ consecutive_motifs = sum(
 )
 audio_speed = float(timing.get("speed", 0))
 effective_rates = [str(item.get("effectiveVoiceRate", "")) for item in timing.get("scenes", [])]
+effective_pitches = [str(item.get("effectiveVoicePitch", "")) for item in timing.get("scenes", [])]
+minimum_words = 88 if language == "tr" else 95
+maximum_words = 138 if language == "tr" else 145
 
 checks = {
     "topic_profile_present": bool(profile.get("visualWorld") and len(profile.get("primaryMotifs", [])) >= 4),
@@ -80,10 +84,11 @@ checks = {
     "forbidden_topic_motifs_absent": not forbidden_leaks,
     "natural_scene_voice_rate": bool(rate_values) and all(-3 <= value <= 3 for value in rate_values),
     "natural_scene_voice_pitch": bool(pitch_values) and all(-5 <= value <= 2 for value in pitch_values),
-    "natural_narration_density": 95 <= narration_word_count <= 145,
+    "natural_narration_density": minimum_words <= narration_word_count <= maximum_words,
     "natural_rendered_audio_tempo": 0.88 <= audio_speed <= 1.12,
     "sentence_tail_preserved": timing.get("sentenceTailPolicy") == "retain-140ms-post-phoneme",
     "scene_voice_rates_applied": len(effective_rates) == len(scenes) and all(effective_rates),
+    "scene_voice_pitches_applied": len(effective_pitches) == len(scenes) and all(effective_pitches),
 }
 
 report.setdefault("checks", {}).update(checks)
@@ -92,8 +97,10 @@ report["topic_primary_motif_count"] = len(set(motifs))
 report["topic_consecutive_motif_repeats"] = consecutive_motifs
 report["topic_forbidden_motif_leaks"] = forbidden_leaks
 report["narration_word_count"] = narration_word_count
+report["narration_word_range"] = [minimum_words, maximum_words]
 report["scene_voice_rates"] = voice_rates
 report["effective_scene_voice_rates"] = effective_rates
+report["effective_scene_voice_pitches"] = effective_pitches
 report["natural_audio_tempo"] = audio_speed
 report["status"] = "PASS" if all(report["checks"].values()) else "FAIL"
 REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -105,8 +112,10 @@ summary = {
     "consecutive_motif_repeats": consecutive_motifs,
     "visual_kind_count": len(set(visual_kinds)),
     "narration_word_count": narration_word_count,
+    "narration_word_range": [minimum_words, maximum_words],
     "natural_audio_tempo": audio_speed,
     "effective_scene_voice_rates": effective_rates,
+    "effective_scene_voice_pitches": effective_pitches,
     "checks": checks,
 }
 print(json.dumps(summary, ensure_ascii=False, indent=2))
