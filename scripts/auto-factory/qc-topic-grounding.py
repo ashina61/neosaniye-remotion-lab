@@ -7,9 +7,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PLAN_PATH = Path(os.getenv("PLAN_PATH", ROOT / "public/auto-factory/plan.json"))
+TIMING_PATH = Path(os.getenv("TIMING_PATH", ROOT / "public/auto-factory/audio/scene-timing.json"))
 REPORT_PATH = Path(os.getenv("QC_REPORT_PATH", ROOT / "out/production-report.json"))
 
 plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
+timing = json.loads(TIMING_PATH.read_text(encoding="utf-8"))
 report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 scenes = plan.get("scenes", [])
 profile = plan.get("topicProfile") or {}
@@ -59,6 +61,8 @@ consecutive_motifs = sum(
     1 for index, motif in enumerate(motifs)
     if index > 0 and motif == motifs[index - 1]
 )
+audio_speed = float(timing.get("speed", 0))
+effective_rates = [str(item.get("effectiveVoiceRate", "")) for item in timing.get("scenes", [])]
 
 checks = {
     "topic_profile_present": bool(profile.get("visualWorld") and len(profile.get("primaryMotifs", [])) >= 4),
@@ -77,6 +81,9 @@ checks = {
     "natural_scene_voice_rate": bool(rate_values) and all(-3 <= value <= 3 for value in rate_values),
     "natural_scene_voice_pitch": bool(pitch_values) and all(-5 <= value <= 2 for value in pitch_values),
     "natural_narration_density": 95 <= narration_word_count <= 145,
+    "natural_rendered_audio_tempo": 0.88 <= audio_speed <= 1.12,
+    "sentence_tail_preserved": timing.get("sentenceTailPolicy") == "retain-140ms-post-phoneme",
+    "scene_voice_rates_applied": len(effective_rates) == len(scenes) and all(effective_rates),
 }
 
 report.setdefault("checks", {}).update(checks)
@@ -86,6 +93,8 @@ report["topic_consecutive_motif_repeats"] = consecutive_motifs
 report["topic_forbidden_motif_leaks"] = forbidden_leaks
 report["narration_word_count"] = narration_word_count
 report["scene_voice_rates"] = voice_rates
+report["effective_scene_voice_rates"] = effective_rates
+report["natural_audio_tempo"] = audio_speed
 report["status"] = "PASS" if all(report["checks"].values()) else "FAIL"
 REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -96,6 +105,8 @@ summary = {
     "consecutive_motif_repeats": consecutive_motifs,
     "visual_kind_count": len(set(visual_kinds)),
     "narration_word_count": narration_word_count,
+    "natural_audio_tempo": audio_speed,
+    "effective_scene_voice_rates": effective_rates,
     "checks": checks,
 }
 print(json.dumps(summary, ensure_ascii=False, indent=2))
