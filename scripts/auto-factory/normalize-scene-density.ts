@@ -1,4 +1,4 @@
-import {readFile, writeFile} from 'node:fs/promises';
+import {appendFile, readFile, writeFile} from 'node:fs/promises';
 
 const planPath = process.env.PLAN_PATH || 'public/auto-factory/plan.json';
 const manifestPath = process.env.MANIFEST_PATH || 'public/auto-factory/manifest.json';
@@ -111,6 +111,10 @@ try {
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
 } catch {
   // Manifest is informational; the production plan remains the source of truth.
+}
+
+if (process.env.GITHUB_OUTPUT) {
+  await appendFile(process.env.GITHUB_OUTPUT, `scene_count=${scenes.length}\n`);
 }
 
 console.log(`Sahne yoğunluğu normalize edildi: ${originalSceneCount} -> ${scenes.length} sahne.`);
