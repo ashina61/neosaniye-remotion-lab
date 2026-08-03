@@ -16,7 +16,9 @@ report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 scenes = plan.get("scenes", [])
 scene_timings = timing.get("scenes", [])
 
-holds = [float(item.get("postSpeechHold", -1)) for item in scene_timings]
+# Scene timing is authored and rendered at millisecond precision. Compare the same
+# precision here so the exact 150 ms target is not rejected as 0.14999999999999858.
+holds = [round(float(item.get("postSpeechHold", -1)), 3) for item in scene_timings]
 minimum_hold = min(holds[:-1], default=-1)
 final_hold = holds[-1] if holds else -1
 sentence_endings = all(
@@ -30,7 +32,7 @@ exact_lines = len(scenes) == len(scene_timings) and all(
 
 v31_checks = {
     "exact_scene_audio_timing": timing.get("timingSource") == "exact-scene-master",
-    "controlled_inter_scene_pause": 0.30 <= float(timing.get("interScenePause", 0)) <= 0.44,
+    "controlled_inter_scene_pause": 0.30 <= round(float(timing.get("interScenePause", 0)), 3) <= 0.44,
     "minimum_post_speech_hold": minimum_hold >= 0.15,
     "final_audio_tail": final_hold >= 0.45,
     "complete_sentence_endings": sentence_endings,
@@ -38,7 +40,7 @@ v31_checks = {
 }
 
 report["timing_source"] = timing.get("timingSource")
-report["inter_scene_pause"] = timing.get("interScenePause")
+report["inter_scene_pause"] = round(float(timing.get("interScenePause", 0)), 3)
 report["minimum_post_speech_hold"] = minimum_hold
 report["final_audio_tail"] = final_hold
 report.setdefault("checks", {}).update(v31_checks)
@@ -47,7 +49,7 @@ REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encodin
 print(json.dumps({
     "v31_status": "PASS" if all(v31_checks.values()) else "FAIL",
     "timing_source": timing.get("timingSource"),
-    "inter_scene_pause": timing.get("interScenePause"),
+    "inter_scene_pause": report["inter_scene_pause"],
     "minimum_post_speech_hold": minimum_hold,
     "final_audio_tail": final_hold,
     "checks": v31_checks,
