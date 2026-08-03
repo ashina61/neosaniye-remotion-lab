@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import re
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).with_name("generate-audio-v33.py")
@@ -37,5 +38,51 @@ if language == "en":
 
     module.synthesize = synthesize_with_compact_tail
 
+
+def rate_ratio(value: str) -> float:
+    match = re.fullmatch(r"\s*([+-]?\d+(?:\.\d+)?)%\s*", value)
+    if not match:
+        return 1.0
+    return max(0.20, 1.0 + float(match.group(1)) / 100.0)
+
+
+def clear_generated_audio() -> None:
+    for path in module.OUT_DIR.iterdir():
+        if path.is_file():
+            path.unlink(missing_ok=True)
+
+
+async def main() -> None:
+    try:
+        await v33.main()
+        return
+    except RuntimeError as error:
+        match = re.search(
+            r"Narration density is outside V3\.1 readability range \(([0-9.]+)x required\)",
+            str(error),
+        )
+        if match is None:
+            raise
+
+        measured_density = float(match.group(1))
+        current_ratio = rate_ratio(str(module.VOICE_RATE))
+        target_density = 0.95
+        adjusted_ratio = current_ratio * measured_density / target_density
+        adjusted_ratio = max(0.35, min(1.25, adjusted_ratio))
+        adjusted_percent = round((adjusted_ratio - 1.0) * 100)
+        adjusted_rate = f"{adjusted_percent:+d}%"
+
+        if adjusted_rate == module.VOICE_RATE:
+            raise
+
+        print(
+            "V3.4 narration density retry: "
+            f"measured={measured_density:.2f}x, voice rate {module.VOICE_RATE} -> {adjusted_rate}"
+        )
+        module.VOICE_RATE = adjusted_rate
+        clear_generated_audio()
+        await v33.main()
+
+
 if __name__ == "__main__":
-    asyncio.run(v33.main())
+    asyncio.run(main())
