@@ -25,7 +25,6 @@ def run(*args: str, capture: bool = False) -> str:
     result = subprocess.run(args, check=True, text=True, capture_output=capture)
     if not capture:
         return ""
-    # ffprobe writes to stdout; ffmpeg filters such as silencedetect write to stderr.
     return f"{result.stdout}\n{result.stderr}".strip()
 
 
@@ -60,8 +59,8 @@ def continuous_text() -> str:
         line = re.sub(r"\s+", " ", line)
         line = re.sub(r"[.!?;:]+$", "", line)
         lines.append(line)
-    # One synthesis call preserves timbre and flow. Semicolons keep transitions short.
-    return "; ".join(lines) + "."
+    # Commas preserve one flowing take without the long resets produced by semicolons.
+    return ", ".join(lines) + "."
 
 
 async def synthesize_continuous() -> tuple[Path, list[dict]]:
@@ -160,7 +159,7 @@ async def main() -> None:
         "ffmpeg", "-y", "-i", str(raw),
         "-af", (
             f"{atempo_chain(speed)},"
-            "highpass=f=68,lowpass=f=12500,"
+            "highpass=f=68,lowpass=f=11000,"
             "acompressor=threshold=-20dB:ratio=1.65:attack=10:release=170,"
             "alimiter=limit=0.92"
         ),
