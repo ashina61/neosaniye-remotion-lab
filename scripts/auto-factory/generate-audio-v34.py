@@ -16,9 +16,9 @@ language = str(module.PLAN.get("language", "tr"))
 
 # V3.1 QC requires a deliberate 300-440 ms sentence interval and at least a
 # 150 ms visual hold after each spoken sentence. GuyNeural already carries a
-# natural tail in every trimmed clip, so remove only 20 ms from the 140 ms
-# safety cushion. This preserves every phoneme while keeping measured silence
-# below the global 480 ms continuity limit.
+# natural 140 ms safety tail after the last detected phoneme. Removing 30 ms
+# leaves roughly 110 ms of protection while keeping measured internal silence
+# under the global 480 ms continuity limit.
 module.INTER_SCENE_PAUSE = 0.30 if language == "en" else 0.36
 
 if language == "en":
@@ -26,7 +26,7 @@ if language == "en":
 
     async def synthesize_with_compact_tail(index: int, line: str):
         path, raw_duration, trimmed_duration = await resilient_synthesize(index, line)
-        compact_duration = max(0.35, trimmed_duration - 0.02)
+        compact_duration = max(0.35, trimmed_duration - 0.03)
         compact_path = module.OUT_DIR / f"scene-{index:02d}-compact.wav"
         module.run(
             "ffmpeg", "-y", "-i", str(path),
