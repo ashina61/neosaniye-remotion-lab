@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -52,10 +53,53 @@ def clear_generated_audio() -> None:
             path.unlink(missing_ok=True)
 
 
+def synchronize_audio_text() -> None:
+    """Make the rendered scene text identical to the sentence sent to TTS.
+
+    V3.1 canonicalizes whitespace and sentence punctuation before synthesis. The
+    old plan kept the pre-canonical voiceLine while scene-timing.json stored the
+    spoken line, so semantically identical text could fail an exact QC check.
+    The timing manifest is the final audio authority, therefore copy its lines
+    back into the plan after the complete audio/timeline pass succeeds.
+    """
+    plan_path = module.PLAN_PATH
+    timing_path = module.OUT_DIR / "scene-timing.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    timing = json.loads(timing_path.read_text(encoding="utf-8"))
+    scenes = plan.get("scenes", [])
+    measured = timing.get("scenes", [])
+
+    if len(scenes) != len(measured):
+        raise RuntimeError(
+            f"V3.4 audio text synchronization mismatch: {len(scenes)} scenes != {len(measured)} timings"
+        )
+
+    canonical_lines: list[str] = []
+    for scene, item in zip(scenes, measured):
+        line = str(item.get("line", "")).strip()
+        if not line:
+            raise RuntimeError(f"V3.4 scene {scene.get('id')} has no canonical audio line")
+        scene["voiceLine"] = line
+        scene["sceneGoal"] = f"Illustrate only this spoken claim: {line}"
+        canonical_lines.append(line)
+
+    plan["narration"] = " ".join(canonical_lines)
+    plan.setdefault("v3", {})["audioTextAuthority"] = "scene-timing.json"
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Read back and fail before render if disk contents still differ.
+    disk_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    disk_lines = [str(scene.get("voiceLine", "")).strip() for scene in disk_plan.get("scenes", [])]
+    timing_lines = [str(item.get("line", "")).strip() for item in measured]
+    if disk_lines != timing_lines:
+        raise RuntimeError("V3.4 canonical audio text readback failed")
+
+    print(f"V3.4 canonical audio text synchronized: {len(canonical_lines)} scenes")
+
+
 async def main() -> None:
     try:
         await v33.main()
-        return
     except RuntimeError as error:
         match = re.search(
             r"Narration density is outside V3\.1 readability range \(([0-9.]+)x required\)",
@@ -82,6 +126,8 @@ async def main() -> None:
         module.VOICE_RATE = adjusted_rate
         clear_generated_audio()
         await v33.main()
+
+    synchronize_audio_text()
 
 
 if __name__ == "__main__":
