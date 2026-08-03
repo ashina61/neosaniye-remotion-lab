@@ -42,6 +42,10 @@ def video_values(data: dict) -> tuple[dict, dict]:
     )
 
 
+def audio_values(data: dict) -> dict:
+    return next(stream for stream in data["streams"] if stream.get("codec_type") == "audio")
+
+
 def normalized(value: str) -> str:
     value = value.lower().replace("ı", "i").replace("ğ", "g").replace("ü", "u").replace("ş", "s").replace("ö", "o").replace("ç", "c")
     return re.sub(r"[^a-z0-9]+", " ", value).strip()
@@ -52,10 +56,15 @@ timing = json.loads(TIMING_PATH.read_text(encoding="utf-8")) if TIMING_PATH.exis
 full_data, mobile_data, audio_data = probe(FULLHD), probe(MOBILE), probe(AUDIO_MASTER)
 full_video, full_audio = video_values(full_data)
 mobile_video, _ = video_values(mobile_data)
+audio_stream = audio_values(audio_data)
 full_duration = float(full_data["format"]["duration"])
 mobile_duration = float(mobile_data["format"]["duration"])
 audio_duration = float(audio_data["format"]["duration"])
 target = float(plan["duration"])
+audio_sample_rate = int(audio_stream.get("sample_rate", 0))
+expected_audio_samples = int(round(target * audio_sample_rate))
+duration_ts = audio_stream.get("duration_ts")
+actual_audio_samples = int(duration_ts) if duration_ts not in (None, "N/A") else int(round(audio_duration * audio_sample_rate))
 scenes = plan.get("scenes", [])
 scene_timings = timing.get("scenes", [])
 
@@ -104,8 +113,8 @@ checks = {
     "mobile_resolution": (int(mobile_video["width"]), int(mobile_video["height"])) == (720, 1280),
     "fullhd_duration": abs(full_duration - target) < 0.16,
     "mobile_duration": abs(mobile_duration - target) < 0.16,
-    "audio_master_duration": abs(audio_duration - target) < 0.05,
-    "audio_48khz": int(full_audio["sample_rate"]) == 48000,
+    "audio_master_duration": abs(actual_audio_samples - expected_audio_samples) <= 1,
+    "audio_48khz": audio_sample_rate == 48000 and int(full_audio["sample_rate"]) == 48000,
     "scene_count": 12 <= len(scenes) <= 16,
     "scene_timing_count": len(scene_timings) == len(scenes),
     "scene_voice_visual_lock": not scene_timing_errors,
@@ -135,6 +144,9 @@ report = {
     "duration_fullhd": full_duration,
     "duration_mobile": mobile_duration,
     "duration_audio_master": audio_duration,
+    "expected_audio_samples": expected_audio_samples,
+    "actual_audio_samples": actual_audio_samples,
+    "audio_sample_delta": actual_audio_samples - expected_audio_samples,
     "scene_count": len(scenes),
     "max_internal_silence": max_internal_silence,
     "unique_hero_ratio": unique_hero_ratio,
