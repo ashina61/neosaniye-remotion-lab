@@ -1,4 +1,4 @@
-name: NeoSaniye Auto Factory V2
+name: NeoSaniye Auto Factory V3
 
 on:
   workflow_dispatch:
@@ -40,15 +40,9 @@ on:
       visual_mode:
         description: Görsel üretim modu
         required: true
-        default: hybrid
+        default: procedural
         type: choice
         options: [procedural, hybrid, ai-heavy]
-      music_mode:
-        description: Arka plan sesi (eski synth müzik tamamen kaldırıldı)
-        required: true
-        default: off
-        type: choice
-        options: [off, soft-documentary]
       research_mode:
         description: Araştırma kaynağı
         required: true
@@ -77,7 +71,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: auto-factory-v2-${{ github.ref }}-${{ github.run_id }}
+  group: auto-factory-v3-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -85,15 +79,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
-      TOPIC_MODE: ${{ inputs.topic_mode || 'random' }}
-      TOPIC: ${{ inputs.topic || '' }}
-      CATEGORY: ${{ inputs.category || 'any' }}
+      TOPIC_MODE: ${{ inputs.topic_mode || 'custom' }}
+      TOPIC: ${{ inputs.topic || 'Antibiyotik direnci nasıl oluşuyor' }}
+      CATEGORY: ${{ inputs.category || 'science' }}
       TARGET_DURATION: ${{ inputs.duration || '46' }}
       LANGUAGE: ${{ inputs.language || 'tr' }}
       VOICE: ${{ inputs.voice || 'tr-TR-AhmetNeural' }}
-      VOICE_RATE: '+5%'
-      VISUAL_MODE: ${{ inputs.visual_mode || 'hybrid' }}
-      MUSIC_MODE: ${{ inputs.music_mode || 'off' }}
+      VOICE_RATE: '+2%'
+      VISUAL_MODE: ${{ inputs.visual_mode || 'procedural' }}
+      MUSIC_MODE: off
       RESEARCH_MODE: ${{ inputs.research_mode || 'wikipedia' }}
       STRICT_AI: ${{ inputs.strict_ai || 'false' }}
       SEED: ${{ inputs.seed || github.run_number }}
@@ -115,60 +109,44 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core zip
+          npm install --no-audit --no-fund
+          python -m pip install --disable-pip-version-check edge-tts
 
-      - name: Install Node dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Install natural TTS
-        run: python -m pip install --disable-pip-version-check edge-tts
-
-      - name: Select topic, research and build scene-locked plan
+      - name: Research and build base plan
         id: plan
         run: npm run auto:plan
 
-      - name: Normalize scene count and narration density
+      - name: Normalize scene density
         id: density
         run: npx tsx scripts/auto-factory/normalize-scene-density.ts
 
-      - name: Generate optional AI image layers
+      - name: Lock narration to concrete topic visuals
+        id: v3
+        run: npm run auto:v3
+
+      - name: Generate optional image layers
         run: npm run auto:images
 
-      - name: Generate and validate scene-locked narration
-        run: |
-          SYNC_OK=0
-          for ATTEMPT in 1 2 3; do
-            echo "TTS sync attempt ${ATTEMPT}/3"
-            npm run auto:audio
-            if python3 scripts/auto-factory/preflight-sync.py; then
-              SYNC_OK=1
-              break
-            fi
-            echo "Yoğun cümleler otomatik kısaltıldı; TTS yeniden üretilecek."
-          done
-          if [ "$SYNC_OK" -ne 1 ]; then
-            echo "Sahne-ses senkronu üç denemede güvenli sınıra giremedi."
-            exit 1
-          fi
+      - name: Generate one continuous narration and word timing
+        run: npm run auto:audio
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Render Full HD Remotion documentary
+      - name: Render Full HD V3 documentary
         run: npm run render:auto
 
-      - name: Lock final duration and master narration
+      - name: Lock final duration and loudness
         run: |
           ffmpeg -y -i out/auto-factory-fullhd.mp4 \
-            -map 0:v:0 -map 0:a:0 \
-            -c:v copy \
+            -map 0:v:0 -map 0:a:0 -c:v copy \
             -af "loudnorm=I=-15.5:TP=-1.5:LRA=7,apad,atrim=0:${TARGET_DURATION}" \
             -c:a aac -b:a 192k -ar 48000 -ac 2 \
-            -t "${TARGET_DURATION}" -movflags +faststart \
-            out/auto-factory-mastered.mp4
+            -t "${TARGET_DURATION}" -movflags +faststart out/auto-factory-mastered.mp4
           mv out/auto-factory-mastered.mp4 out/auto-factory-fullhd.mp4
 
       - name: Render mobile preview
@@ -176,18 +154,16 @@ jobs:
           ffmpeg -y -i out/auto-factory-fullhd.mp4 \
             -vf scale=720:1280:flags=lanczos \
             -c:v libx264 -profile:v main -level 3.1 -preset fast -crf 23 \
-            -pix_fmt yuv420p -r 30 \
-            -c:a aac -b:a 128k -ar 48000 -ac 2 \
+            -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 48000 -ac 2 \
             -t "${TARGET_DURATION}" -movflags +faststart out/auto-factory-mobile.mp4
 
-      - name: Build review contact sheet
+      - name: Build V3 contact sheet
         run: |
           mkdir -p out/review
           ffmpeg -y -i out/auto-factory-fullhd.mp4 \
-            -vf "fps=1/5.6,scale=270:-1,tile=2x4" \
-            -frames:v 1 out/review/contact.jpg
+            -vf "fps=1/3.2,scale=270:-1,tile=3x5" -frames:v 1 out/review/contact.jpg
 
-      - name: Quality control and sync validation
+      - name: V3 quality control
         run: npm run auto:qc
 
       - name: Build downloadable package
@@ -204,30 +180,26 @@ jobs:
           cp public/auto-factory/audio/scene-timing.json "out/package/$SLUG/scene-timing.json"
           cd out/package && zip -qr "../$SLUG-package.zip" "$SLUG"
 
-      - name: Write Actions summary
+      - name: Write summary
         run: |
-          SLUG='${{ steps.plan.outputs.slug }}'
-          TOPIC='${{ steps.plan.outputs.topic }}'
           {
-            echo "# NeoSaniye Auto Factory V2"
+            echo "# NeoSaniye Auto Factory V3"
             echo ""
-            echo "**Konu:** $TOPIC"
+            echo "**Konu:** ${{ steps.plan.outputs.topic }}"
             echo ""
-            echo "**Süre:** ${{ steps.plan.outputs.duration }} saniye"
+            echo "**Profil:** ${{ steps.v3.outputs.profile }}"
             echo ""
-            echo "**Sahne:** ${{ steps.density.outputs.scene_count }}"
+            echo "**Sahne:** ${{ steps.v3.outputs.scene_count }}"
             echo ""
-            echo "**Ses:** Sahne bazlı neural TTS — gerçek TTS süresiyle render öncesi doğrulandı"
+            echo "**Ses:** Tek kesintisiz neural anlatım + kelime zamanlı sahneler"
             echo ""
-            echo "**Arka plan:** ${MUSIC_MODE}"
-            echo ""
-            echo "Artifact: \`neosaniye-$SLUG\`"
+            echo "**Müzik:** Kapalı"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload completed V2 artifact
+      - name: Upload completed V3 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neosaniye-${{ steps.plan.outputs.slug }}
+          name: neosaniye-v3-${{ steps.plan.outputs.slug }}
           path: |
             out/${{ steps.plan.outputs.slug }}-package.zip
             out/auto-factory-fullhd.mp4
