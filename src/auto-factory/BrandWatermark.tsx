@@ -3,30 +3,38 @@ import {interpolate, useCurrentFrame} from 'remotion';
 
 export const BrandWatermark: React.FC = () => {
   const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 10], [0, 0.92], {extrapolateRight: 'clamp'});
-  const scale = interpolate(frame, [0, 14], [0.9, 1], {extrapolateRight: 'clamp'});
+  const opacity = interpolate(frame, [0, 8], [0, 0.96], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const translateY = interpolate(frame, [0, 10], [-6, 0], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+
   return (
     <div
       style={{
         position: 'absolute',
-        left: 12,
-        top: 8,
-        width: 50,
-        height: 50,
-        borderRadius: 13,
-        background: 'rgba(3,5,7,.78)',
-        border: '1px solid rgba(255,255,255,.16)',
-        boxShadow: '0 6px 18px rgba(0,0,0,.28)',
+        left: 32,
+        top: 72,
+        width: 94,
+        height: 72,
         opacity,
-        transform: `scale(${scale})`,
+        transform: `translateY(${translateY}px)`,
         transformOrigin: 'top left',
         zIndex: 50,
         pointerEvents: 'none',
-        display: 'grid',
-        placeItems: 'center',
+        filter: 'drop-shadow(0 3px 7px rgba(0,0,0,.9)) drop-shadow(0 0 2px rgba(0,0,0,.8))',
       }}
     >
-      <svg width="43" height="43" viewBox="185 25 430 250" aria-hidden="true">
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="185 25 430 250"
+        preserveAspectRatio="xMinYMin meet"
+        aria-hidden="true"
+      >
         <defs>
           <linearGradient id="neosaniye-cyan" x1="0" x2="1">
             <stop stopColor="#ffffff" />
