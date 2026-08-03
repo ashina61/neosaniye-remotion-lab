@@ -14,12 +14,14 @@ spec.loader.exec_module(v35)
 
 module = v35.module
 base_synthesize = module.synthesize
-MAX_NATURAL_PAUSE = 0.52
-RETAINED_PAUSE = 0.22
+# Repair early enough that the slowest allowed 0.88x global atempo pass cannot
+# stretch an internal pause back over the 0.48 s master ceiling.
+MAX_NATURAL_PAUSE = 0.36
+RETAINED_PAUSE = 0.18
 
 
 def compact_internal_silences(path: Path) -> tuple[int, float]:
-    """Shorten only long silence inside a scene, never its beginning or ending."""
+    """Shorten long silence inside one sentence, never its beginning or ending."""
     duration = module.probe_duration(path)
     silences = module.detect_silence(path, minimum=MAX_NATURAL_PAUSE)
     internal = [
