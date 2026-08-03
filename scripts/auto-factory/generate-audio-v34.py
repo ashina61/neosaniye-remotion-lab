@@ -11,10 +11,11 @@ if spec is None or spec.loader is None:
 v33 = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(v33)
 
-# Edge TTS already contributes roughly 150-180 ms of quiet sentence tail. Adding
-# another 360 ms produced a measured 530 ms break. A 300 ms explicit pause keeps
-# about 150 ms of visual reading hold while keeping total detected silence < 480 ms.
-v33.v32.module.INTER_SCENE_PAUSE = 0.30
+# Edge voices retain a short natural tail after trimming. A fixed 300 ms gap joined
+# with that tail measured as 500 ms for GuyNeural. Keep the acoustic pause compact;
+# the visual scene itself still remains on screen for its separate reading hold.
+language = str(v33.v32.module.PLAN.get("language", "tr"))
+v33.v32.module.INTER_SCENE_PAUSE = 0.18 if language == "en" else 0.22
 
 if __name__ == "__main__":
     asyncio.run(v33.main())
