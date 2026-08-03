@@ -18,7 +18,7 @@
     "auto:v3": "tsx scripts/auto-factory/v3-postprocess.ts && tsx scripts/auto-factory/v3-diversify.ts && tsx scripts/auto-factory/v3-sanitize-topic.ts && tsx scripts/auto-factory/v3-readability.ts",
     "auto:images": "tsx scripts/auto-factory/generate-images.ts",
     "auto:audio": "python3 scripts/auto-factory/generate-audio-v31.py",
-    "auto:qc": "python3 scripts/auto-factory/qc.py",
+    "auto:qc": "python3 scripts/auto-factory/qc.py && python3 scripts/auto-factory/qc-v31.py",
     "studio": "remotion studio src/index.ts",
     "studio:db": "remotion studio src/db-cooper/index.ts",
     "studio:fu": "remotion studio src/first-university/index.ts",
