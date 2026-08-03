@@ -16,8 +16,6 @@ report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 scenes = plan.get("scenes", [])
 scene_timings = timing.get("scenes", [])
 
-# Scene timing is authored and rendered at millisecond precision. Compare the same
-# precision here so the exact 150 ms target is not rejected as 0.14999999999999858.
 holds = [round(float(item.get("postSpeechHold", -1)), 3) for item in scene_timings]
 minimum_hold = min(holds[:-1], default=-1)
 final_hold = holds[-1] if holds else -1
@@ -30,9 +28,16 @@ exact_lines = len(scenes) == len(scene_timings) and all(
     for scene, item in zip(scenes, scene_timings)
 )
 
+explicit_pause = round(float(timing.get("explicitInterScenePause", timing.get("interScenePause", 0))), 3)
+estimated_boundary = round(float(timing.get("estimatedAcousticBoundary", 99)), 3)
+max_internal_silence = round(float(timing.get("maxInternalSilence", 99)), 3)
+
 v31_checks = {
     "exact_scene_audio_timing": timing.get("timingSource") == "exact-scene-master",
-    "controlled_inter_scene_pause": 0.30 <= round(float(timing.get("interScenePause", 0)), 3) <= 0.44,
+    "acoustic_boundary_model": timing.get("boundaryPauseModel") == "retained-tail-plus-short-explicit-gap",
+    "controlled_explicit_pause": 0.08 <= explicit_pause <= 0.20,
+    "controlled_acoustic_boundary": 0.22 <= estimated_boundary <= 0.44,
+    "maximum_internal_silence": max_internal_silence <= 0.48,
     "minimum_post_speech_hold": minimum_hold >= 0.15,
     "final_audio_tail": final_hold >= 0.45,
     "complete_sentence_endings": sentence_endings,
@@ -40,16 +45,21 @@ v31_checks = {
 }
 
 report["timing_source"] = timing.get("timingSource")
-report["inter_scene_pause"] = round(float(timing.get("interScenePause", 0)), 3)
+report["inter_scene_pause"] = explicit_pause
+report["explicit_inter_scene_pause"] = explicit_pause
+report["estimated_acoustic_boundary"] = estimated_boundary
 report["minimum_post_speech_hold"] = minimum_hold
 report["final_audio_tail"] = final_hold
+report["max_internal_silence"] = max_internal_silence
 report.setdefault("checks", {}).update(v31_checks)
 report["status"] = "PASS" if all(report["checks"].values()) else "FAIL"
 REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 print(json.dumps({
     "v31_status": "PASS" if all(v31_checks.values()) else "FAIL",
     "timing_source": timing.get("timingSource"),
-    "inter_scene_pause": report["inter_scene_pause"],
+    "explicit_inter_scene_pause": explicit_pause,
+    "estimated_acoustic_boundary": estimated_boundary,
+    "max_internal_silence": max_internal_silence,
     "minimum_post_speech_hold": minimum_hold,
     "final_audio_tail": final_hold,
     "checks": v31_checks,
