@@ -22,69 +22,69 @@ const firstSentence = (value: string) => {
   const match = value.trim().match(/^.*?[.!?](?:\s|$)/);
   return sentence(match ? match[0].trim() : value);
 };
-const compact = (value: unknown, max = 48) => {
+const compact = (value: unknown, max = 34) => {
   const clean = String(value || '').replace(/\s+/g, ' ').trim();
-  return clean.length <= max ? clean : clean.slice(0, max).trim();
+  if (clean.length <= max) return clean;
+  const words = clean.split(' ');
+  let result = '';
+  for (const word of words) {
+    const candidate = result ? `${result} ${word}` : word;
+    if (candidate.length > max) break;
+    result = candidate;
+  }
+  return result || clean.slice(0, max).trim();
 };
 
 const scenes = (Array.isArray(plan.scenes) ? plan.scenes : []) as Scene[];
 if (!scenes.length) throw new Error('V3 voice naturalizer received no scenes');
 
-// Topic grounding uses English canonical motif names so the renderer can select
-// deterministic icons. Turkish narration must never speak those internal names.
+// Topic grounding may have appended a second filler sentence to reach a global
+// word budget. Edge TTS can pause for more than a second at that full stop, so
+// every scene is reduced to one complete spoken sentence before pacing.
 for (const scene of scenes) {
-  let line = sentence(scene.voiceLine || scene.title || '');
-  if (language === 'tr' && scene.audioExpansionApplied) {
-    line = firstSentence(line);
-    scene.audioExpansionApplied = false;
-  }
-  scene.voiceLine = trimWords(line, 26);
+  const source = sentence(scene.voiceLine || scene.title || '');
+  scene.voiceLine = trimWords(firstSentence(source), 18);
+  scene.audioExpansionApplied = false;
+  scene.voiceNaturalizerExpanded = false;
 }
 
 const localizedClause = (scene: Scene) => {
-  const title = compact(scene.title || scene.heroVisual, 42).toLocaleLowerCase(language === 'tr' ? 'tr-TR' : 'en-US');
-  const kicker = compact(scene.kicker || scene.supportVisuals?.[0] || scene.heroVisual, 46).toLocaleLowerCase(language === 'tr' ? 'tr-TR' : 'en-US');
-  if (language === 'tr') return `Bu aşama, ${title} ile ${kicker} arasındaki bağlantıyı gösterir.`;
-  return `This stage connects ${title} with ${kicker}.`;
+  const locale = language === 'tr' ? 'tr-TR' : 'en-US';
+  const focus = compact(scene.title || scene.kicker || scene.heroVisual, 32).toLocaleLowerCase(locale);
+  if (language === 'tr') return `, böylece ${focus} etkisi görünür olur`;
+  return `, exposing the role of ${focus}`;
 };
 
 const minimumWords = language === 'tr'
   ? Math.max(88, Math.round(Number(plan.duration || 46) * 1.92))
-  : Math.max(98, Math.round(Number(plan.duration || 46) * 2.18));
-const maximumWords = language === 'tr' ? 138 : 145;
+  : Math.max(95, Math.round(Number(plan.duration || 46) * 2.06));
+const maximumWords = language === 'tr' ? 132 : 138;
 const totalWords = () => scenes.reduce((sum, scene) => sum + wordCount(scene.voiceLine), 0);
 
+// Add a short dependent clause to the shortest scenes. Do not add another full
+// sentence: one scene must remain one continuous TTS phrase with no long pause.
 let guard = 0;
-while (totalWords() < minimumWords && guard < scenes.length * 2) {
+while (totalWords() < minimumWords && guard < scenes.length) {
   const candidate = scenes
     .map((scene, index) => ({scene, index, count: wordCount(scene.voiceLine)}))
-    .filter(({scene, count}) => !scene.voiceNaturalizerExpanded && count < 21)
+    .filter(({scene, count}) => !scene.voiceNaturalizerExpanded && count < 14)
     .sort((a, b) => a.count - b.count || a.index - b.index)[0];
   if (!candidate) break;
-  candidate.scene.voiceLine = `${String(candidate.scene.voiceLine).replace(/[.!?]+$/, '')}. ${localizedClause(candidate.scene)}`;
+  const base = String(candidate.scene.voiceLine).replace(/[.!?]+$/, '');
+  candidate.scene.voiceLine = trimWords(`${base}${localizedClause(candidate.scene)}`, 18);
   candidate.scene.voiceNaturalizerExpanded = true;
   guard += 1;
 }
 
-// Oversized provider output is shortened before TTS instead of being rushed by
-// atempo. Remove secondary clauses first, then cap only the longest sentence.
+// If provider output is still dense, shorten only the longest lines. This is
+// safer and more natural than forcing the whole master through extreme atempo.
 guard = 0;
 while (totalWords() > maximumWords && guard < scenes.length * 3) {
-  const expanded = scenes
+  const longest = scenes
     .map((scene, index) => ({scene, index, count: wordCount(scene.voiceLine)}))
-    .filter(({scene}) => scene.voiceNaturalizerExpanded || scene.audioExpansionApplied)
     .sort((a, b) => b.count - a.count || a.index - b.index)[0];
-  if (expanded) {
-    expanded.scene.voiceLine = firstSentence(String(expanded.scene.voiceLine));
-    expanded.scene.voiceNaturalizerExpanded = false;
-    expanded.scene.audioExpansionApplied = false;
-  } else {
-    const longest = scenes
-      .map((scene, index) => ({scene, index, count: wordCount(scene.voiceLine)}))
-      .sort((a, b) => b.count - a.count || a.index - b.index)[0];
-    if (!longest || longest.count <= 12) break;
-    longest.scene.voiceLine = trimWords(String(longest.scene.voiceLine), longest.count - 2);
-  }
+  if (!longest || longest.count <= 11) break;
+  longest.scene.voiceLine = trimWords(String(longest.scene.voiceLine), longest.count - 2);
   guard += 1;
 }
 
@@ -103,10 +103,14 @@ if (finalWords < minimumWords || finalWords > maximumWords) {
 plan.narration = scenes.map((scene) => scene.voiceLine).join(' ');
 plan.v3 = {
   ...(plan.v3 || {}),
-  voiceNaturalizer: 'topic-safe-scene-pacing',
-  voiceNaturalizerVersion: 1,
+  voiceNaturalizer: 'single-sentence-topic-safe-pacing',
+  voiceNaturalizerVersion: 2,
   narrationWordCount: finalWords,
   narrationWordRange: [minimumWords, maximumWords],
+  maximumWordsPerScene: 18,
 };
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
-console.log(`V3 natural narration ready: language=${language}, words=${finalWords}, range=${minimumWords}-${maximumWords}`);
+console.log(
+  `V3 natural narration ready: language=${language}, words=${finalWords}, ` +
+  `range=${minimumWords}-${maximumWords}, singleSentence=true`,
+);
