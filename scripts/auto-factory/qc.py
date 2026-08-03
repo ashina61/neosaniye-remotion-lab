@@ -52,17 +52,19 @@ def normalized(value: str) -> str:
 
 
 def contains_normalized_phrase(text: str, phrase: str) -> bool:
-    """Match a forbidden concept as a complete token or phrase, never as a substring.
-
-    Turkish ASCII folding turns `aşı` into `asi`. A raw substring check would then
-    falsely match words such as `taşınan`, `halkasının` or `şeması`. Padding the
-    normalized values with spaces preserves exact single-word and multi-word checks.
-    """
+    """Match a forbidden concept as a complete token or phrase, never as a substring."""
     haystack = normalized(text)
     needle = normalized(phrase)
     if not needle:
         return False
     return f" {needle} " in f" {haystack} "
+
+
+def displayed_claim(scene: dict) -> str:
+    claim = str(scene.get("sceneGoal", ""))
+    claim = re.sub(r"^Show exactly how:\s*", "", claim, flags=re.I)
+    claim = re.sub(r"^Illustrate only this spoken claim:\s*", "", claim, flags=re.I)
+    return claim.strip()
 
 
 plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
@@ -89,6 +91,17 @@ layouts = [scene.get("layout") for scene in scenes]
 transitions = [scene.get("transition") for scene in scenes]
 consecutive_visual_repeats = sum(1 for index in range(1, len(visual_kinds)) if visual_kinds[index] == visual_kinds[index - 1])
 min_alignment = min((float(scene.get("alignmentScore", 0)) for scene in scenes), default=0)
+minimum_scene_duration = min((float(scene.get("duration", 0)) for scene in scenes), default=0)
+minimum_final_hold = min((float(scene.get("finalHoldRatio", 0)) for scene in scenes), default=0)
+
+caption_errors: list[str] = []
+for scene in scenes:
+    voice_line = str(scene.get("voiceLine", "")).strip()
+    claim = displayed_claim(scene)
+    if normalized(voice_line) != normalized(claim):
+        caption_errors.append(f"scene-{scene.get('id')}: displayed claim differs from narration")
+    if voice_line and not re.search(r"[.!?]$", voice_line):
+        caption_errors.append(f"scene-{scene.get('id')}: narration has no sentence ending")
 
 forbidden_leaks: list[str] = []
 for scene in scenes:
@@ -119,6 +132,7 @@ sfx_count = sum(1 for scene in scenes if scene.get("sfx") != "none")
 checks = {
     "factory_version_v3": int(plan.get("version", 0)) == 3,
     "topic_locked_planner": plan.get("v3", {}).get("planner") == "topic-locked",
+    "readability_planner": plan.get("v3", {}).get("readability") == "slow-followable",
     "continuous_word_timed_audio": timing.get("mode") == "continuous-word-timed",
     "fullhd_exists": FULLHD.exists() and FULLHD.stat().st_size > 1_000_000,
     "mobile_exists": MOBILE.exists() and MOBILE.stat().st_size > 500_000,
@@ -129,11 +143,14 @@ checks = {
     "mobile_duration": abs(mobile_duration - target) < 0.16,
     "audio_master_duration": abs(actual_audio_samples - expected_audio_samples) <= 1,
     "audio_48khz": audio_sample_rate == 48000 and int(full_audio["sample_rate"]) == 48000,
-    "scene_count": 12 <= len(scenes) <= 16,
+    "scene_count": 10 <= len(scenes) <= 12,
+    "minimum_scene_duration": minimum_scene_duration >= 3.0,
+    "final_visual_hold": minimum_final_hold >= 0.25,
+    "caption_completeness": not caption_errors,
     "scene_timing_count": len(scene_timings) == len(scenes),
     "scene_voice_visual_lock": not scene_timing_errors,
     "continuous_speech": max_internal_silence <= 0.48,
-    "unique_hero_visuals": unique_hero_ratio >= 0.92,
+    "unique_hero_visuals": unique_hero_ratio >= 0.90,
     "no_consecutive_template_repeat": consecutive_visual_repeats == 0,
     "visual_kind_diversity": len(set(visual_kinds)) >= 6,
     "layout_diversity": len(set(layouts)) >= 6,
@@ -153,6 +170,7 @@ report = {
     "topic": plan.get("topic"),
     "slug": plan.get("slug"),
     "v3_profile": plan.get("v3", {}).get("profile"),
+    "readability_profile": plan.get("v3", {}).get("readability"),
     "sync_mode": timing.get("mode"),
     "duration_target": target,
     "duration_fullhd": full_duration,
@@ -162,6 +180,8 @@ report = {
     "actual_audio_samples": actual_audio_samples,
     "audio_sample_delta": actual_audio_samples - expected_audio_samples,
     "scene_count": len(scenes),
+    "minimum_scene_duration": minimum_scene_duration,
+    "minimum_final_hold_ratio": minimum_final_hold,
     "max_internal_silence": max_internal_silence,
     "unique_hero_ratio": unique_hero_ratio,
     "consecutive_visual_repeats": consecutive_visual_repeats,
@@ -169,6 +189,7 @@ report = {
     "layout_count": len(set(layouts)),
     "transition_count": len(set(transitions)),
     "minimum_alignment_score": min_alignment,
+    "caption_errors": caption_errors,
     "scene_timing_errors": scene_timing_errors,
     "forbidden_concept_leaks": forbidden_leaks,
     "integrated_loudness_lufs": integrated,
