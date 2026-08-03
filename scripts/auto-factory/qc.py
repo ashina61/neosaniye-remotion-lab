@@ -51,6 +51,20 @@ def normalized(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
 
+def contains_normalized_phrase(text: str, phrase: str) -> bool:
+    """Match a forbidden concept as a complete token or phrase, never as a substring.
+
+    Turkish ASCII folding turns `aşı` into `asi`. A raw substring check would then
+    falsely match words such as `taşınan`, `halkasının` or `şeması`. Padding the
+    normalized values with spaces preserves exact single-word and multi-word checks.
+    """
+    haystack = normalized(text)
+    needle = normalized(phrase)
+    if not needle:
+        return False
+    return f" {needle} " in f" {haystack} "
+
+
 plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
 timing = json.loads(TIMING_PATH.read_text(encoding="utf-8")) if TIMING_PATH.exists() else {"scenes": []}
 full_data, mobile_data, audio_data = probe(FULLHD), probe(MOBILE), probe(AUDIO_MASTER)
@@ -78,13 +92,13 @@ min_alignment = min((float(scene.get("alignmentScore", 0)) for scene in scenes),
 
 forbidden_leaks: list[str] = []
 for scene in scenes:
-    visual_text = normalized(" ".join([
+    visual_text = " ".join([
         str(scene.get("heroVisual", "")),
         *[str(value) for value in scene.get("supportVisuals", [])],
         *[str(value) for value in scene.get("props", [])],
-    ]))
+    ])
     for forbidden in scene.get("forbiddenTags", []):
-        if normalized(str(forbidden)) and normalized(str(forbidden)) in visual_text:
+        if contains_normalized_phrase(visual_text, str(forbidden)):
             forbidden_leaks.append(f"scene-{scene.get('id')}: {forbidden}")
 
 scene_timing_errors: list[str] = []
