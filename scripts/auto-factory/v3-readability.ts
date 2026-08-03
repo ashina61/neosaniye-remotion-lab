@@ -55,7 +55,9 @@ const buildScene = (base: Scene, voiceLine: string, overrides: Partial<Scene>): 
     ...base,
     ...overrides,
     voiceLine: voice,
-    sceneGoal: language === 'en' ? `Show exactly how: ${voice}` : `Tam olarak şunu göster: ${voice}`,
+    // Keep one canonical prefix in both languages. The renderer and QC remove it
+    // before comparing the displayed claim with narration.
+    sceneGoal: `Illustrate only this spoken claim: ${voice}`,
     heroVisual: compact(heroVisual, 54),
     supportVisuals,
     props: supportVisuals.map((value: string) => compact(value.toLocaleUpperCase(locale), 18)).slice(0, 6),
@@ -66,7 +68,7 @@ const buildScene = (base: Scene, voiceLine: string, overrides: Partial<Scene>): 
       {at: 0.50, label: compact(supportVisuals[1], 42), action: 'connect'},
       {at: 0.70, label: compact(supportVisuals[2] || heroVisual, 42), action: 'highlight'},
     ],
-    visualSignature: `readable-v32:${base.id}:${normalize(heroVisual)}`,
+    visualSignature: `readable-v33:${base.id}:${normalize(heroVisual)}`,
     alignmentScore: alignmentScore(voice, heroVisual, supportVisuals),
   };
 };
@@ -152,6 +154,55 @@ plan.scenes = readableScenes.map((scene, index) => {
   cursor += sceneDuration;
   return result;
 });
+
+// Readability is the final scene-reduction stage, so diversity must be locked here.
+// Otherwise the earlier diversify pass is overwritten when 14 source scenes become 10.
+const visualKindSequences: Record<string, string[]> = {
+  history: ['map-route','timeline','document','comparison','object-exploded','cause-effect','archive-wall','world-network','process-flow','evidence-board'],
+  science: ['biology','mechanism','evidence-board','cause-effect','process-flow','comparison','object-exploded','timeline','world-network','before-after'],
+  economy: ['currency','world-network','document','comparison','mechanism','cause-effect','commodity','map-route','evidence-board','process-flow'],
+  geopolitics: ['map-route','document','comparison','cause-effect','world-network','evidence-board','mechanism','process-flow','archive-wall','timeline'],
+  technology: ['mechanism','world-network','evidence-board','cause-effect','process-flow','comparison','object-exploded','timeline','document','map-route'],
+  mystery: ['portrait-dossier','evidence-board','map-route','comparison','object-exploded','cause-effect','archive-wall','timeline','document','process-flow'],
+  nature: ['biology','map-evolution','mechanism','cause-effect','process-flow','comparison','evidence-board','timeline','object-exploded','world-network'],
+};
+const fallbackSequence = ['map-route','timeline','document','comparison','object-exploded','cause-effect','evidence-board','world-network','process-flow','archive-wall'];
+const currentKinds = plan.scenes.map((scene: Scene) => String(scene.visualKind));
+const currentKindCount = new Set(currentKinds).size;
+const hasConsecutiveKind = currentKinds.some((kind: string, index: number) => index > 0 && kind === currentKinds[index - 1]);
+const needsFinalDiversity = profile === 'generic-topic-locked' || currentKindCount < 6 || hasConsecutiveKind;
+
+if (needsFinalDiversity) {
+  const sequence = visualKindSequences[String(plan.category || '').toLowerCase()] || fallbackSequence;
+  plan.scenes = plan.scenes.map((scene: Scene, index: number) => {
+    const visualKind = sequence[index % sequence.length];
+    const shotType = ['map-route','map-evolution','world-network'].includes(visualKind)
+      ? 'wide'
+      : ['document','archive-wall','evidence-board'].includes(visualKind)
+        ? 'dossier'
+        : ['comparison','before-after'].includes(visualKind)
+          ? 'comparison'
+          : ['object-exploded','mechanism'].includes(visualKind)
+            ? 'diagram'
+            : ['biology','microbe-field'].includes(visualKind)
+              ? 'macro'
+              : 'process';
+    return {
+      ...scene,
+      visualKind,
+      shotType,
+      visualSignature: `readable-v33:${scene.id}:${visualKind}:${normalize(String(scene.heroVisual)).slice(0, 36)}`,
+    };
+  });
+}
+
+const finalKinds = plan.scenes.map((scene: Scene) => String(scene.visualKind));
+const finalKindCount = new Set(finalKinds).size;
+const finalConsecutive = finalKinds.filter((kind: string, index: number) => index > 0 && kind === finalKinds[index - 1]);
+if (finalKindCount < 6 || finalConsecutive.length > 0) {
+  throw new Error(`V3.3 final visual diversity failed: families=${finalKindCount}, consecutive=${finalConsecutive.length}`);
+}
+
 plan.scenes[plan.scenes.length - 1].duration = Number((duration - Number(plan.scenes[plan.scenes.length - 1].start)).toFixed(3));
 plan.narration = plan.scenes.map((scene: Scene) => sentence(String(scene.voiceLine))).join(' ');
 plan.v3 = {
@@ -163,7 +214,12 @@ plan.v3 = {
   punctuationMode: 'semantic-complete-sentences',
   maximumCaptionCps: 18,
   language,
+  finalVisualKindCount: finalKindCount,
+  finalVisualDiversityVersion: 1,
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
-console.log(`V3.2 readability ready: ${source.length} -> ${readableScenes.length} scenes | ${language} | minimum ${plan.v3.minimumPlannedSceneDuration.toFixed(2)}s`);
+console.log(
+  `V3.3 readability ready: ${source.length} -> ${readableScenes.length} scenes | ${language} | ` +
+  `minimum ${plan.v3.minimumPlannedSceneDuration.toFixed(2)}s | visual families ${finalKindCount}`,
+);
