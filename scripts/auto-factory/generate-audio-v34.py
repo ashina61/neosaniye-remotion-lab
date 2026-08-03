@@ -16,28 +16,11 @@ spec.loader.exec_module(v33)
 module = v33.v32.module
 language = str(module.PLAN.get("language", "tr"))
 
-# V3.1 QC requires a deliberate 300-440 ms sentence interval and at least a
-# 150 ms visual hold after each spoken sentence. GuyNeural already carries a
-# natural 140 ms safety tail after the last detected phoneme. Removing 30 ms
-# leaves roughly 110 ms of protection while keeping measured internal silence
-# under the global 480 ms continuity limit.
+# Keep the full 140 ms post-phoneme safety tail produced by V3.1. The previous
+# English wrapper removed another 30 ms from every sentence and could make final
+# consonants sound clipped. A 300 ms inter-scene pause plus the retained tail is
+# still below the 480 ms continuity ceiling.
 module.INTER_SCENE_PAUSE = 0.30 if language == "en" else 0.36
-
-if language == "en":
-    resilient_synthesize = module.synthesize
-
-    async def synthesize_with_compact_tail(index: int, line: str):
-        path, raw_duration, trimmed_duration = await resilient_synthesize(index, line)
-        compact_duration = max(0.35, trimmed_duration - 0.03)
-        compact_path = module.OUT_DIR / f"scene-{index:02d}-compact.wav"
-        module.run(
-            "ffmpeg", "-y", "-i", str(path),
-            "-af", f"atrim=start=0:end={compact_duration:.6f},asetpts=PTS-STARTPTS",
-            "-ar", str(module.SAMPLE_RATE), "-ac", "2", str(compact_path),
-        )
-        return compact_path, raw_duration, module.probe_duration(compact_path)
-
-    module.synthesize = synthesize_with_compact_tail
 
 
 def rate_ratio(value: str) -> float:
@@ -54,14 +37,7 @@ def clear_generated_audio() -> None:
 
 
 def synchronize_audio_text() -> None:
-    """Make the rendered scene text identical to the sentence sent to TTS.
-
-    V3.1 canonicalizes whitespace and sentence punctuation before synthesis. The
-    old plan kept the pre-canonical voiceLine while scene-timing.json stored the
-    spoken line, so semantically identical text could fail an exact QC check.
-    The timing manifest is the final audio authority, therefore copy its lines
-    back into the plan after the complete audio/timeline pass succeeds.
-    """
+    """Make the rendered scene text identical to the sentence sent to TTS."""
     plan_path = module.PLAN_PATH
     timing_path = module.OUT_DIR / "scene-timing.json"
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
@@ -87,7 +63,6 @@ def synchronize_audio_text() -> None:
     plan.setdefault("v3", {})["audioTextAuthority"] = "scene-timing.json"
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Read back and fail before render if disk contents still differ.
     disk_plan = json.loads(plan_path.read_text(encoding="utf-8"))
     disk_lines = [str(scene.get("voiceLine", "")).strip() for scene in disk_plan.get("scenes", [])]
     timing_lines = [str(item.get("line", "")).strip() for item in measured]
@@ -110,11 +85,21 @@ async def main() -> None:
 
         measured_density = float(match.group(1))
         current_ratio = rate_ratio(str(module.VOICE_RATE))
-        target_density = 0.95
-        adjusted_ratio = current_ratio * measured_density / target_density
-        adjusted_ratio = max(0.35, min(1.25, adjusted_ratio))
+        target_density = 0.98
+        requested_ratio = current_ratio * measured_density / target_density
+
+        # Natural speech only. The former 0.35-1.25 clamp could create extremely
+        # slow or rushed narration. Topic grounding now targets the correct word
+        # budget, so the rescue may make only a small correction.
+        adjusted_ratio = max(0.88, min(1.12, requested_ratio))
         adjusted_percent = round((adjusted_ratio - 1.0) * 100)
         adjusted_rate = f"{adjusted_percent:+d}%"
+
+        if requested_ratio < 0.88 or requested_ratio > 1.12:
+            print(
+                "V3.4 natural voice guard: requested "
+                f"{(requested_ratio - 1.0) * 100:+.0f}% was capped to {adjusted_rate}"
+            )
 
         if adjusted_rate == module.VOICE_RATE:
             raise
