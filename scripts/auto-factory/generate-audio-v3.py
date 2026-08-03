@@ -23,11 +23,15 @@ SAMPLE_RATE = 48_000
 
 def run(*args: str, capture: bool = False) -> str:
     result = subprocess.run(args, check=True, text=True, capture_output=capture)
-    return result.stdout.strip() if capture else ""
+    if not capture:
+        return ""
+    # ffprobe writes to stdout; ffmpeg filters such as silencedetect write to stderr.
+    return f"{result.stdout}\n{result.stderr}".strip()
 
 
 def probe_duration(path: Path) -> float:
-    return float(run("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path), capture=True))
+    output = run("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path), capture=True)
+    return float(output.splitlines()[0])
 
 
 def words(value: str) -> list[str]:
@@ -48,7 +52,7 @@ def atempo_chain(speed: float) -> str:
 
 
 def continuous_text() -> str:
-    lines = []
+    lines: list[str] = []
     for scene in PLAN["scenes"]:
         line = str(scene.get("voiceLine") or scene.get("title") or "").strip()
         if not line:
@@ -56,8 +60,8 @@ def continuous_text() -> str:
         line = re.sub(r"\s+", " ", line)
         line = re.sub(r"[.!?;:]+$", "", line)
         lines.append(line)
-    # A single synthesis call keeps the voice timbre and breath continuous.
-    return ". ".join(lines) + "."
+    # One synthesis call preserves timbre and flow. Semicolons keep transitions short.
+    return "; ".join(lines) + "."
 
 
 async def synthesize_continuous() -> tuple[Path, list[dict]]:
@@ -80,7 +84,11 @@ async def synthesize_continuous() -> tuple[Path, list[dict]]:
 
 
 def detect_silence(path: Path) -> list[tuple[float, float]]:
-    output = run("ffmpeg", "-hide_banner", "-i", str(path), "-af", "silencedetect=noise=-38dB:d=0.12", "-f", "null", "-", capture=True)
+    output = run(
+        "ffmpeg", "-hide_banner", "-i", str(path),
+        "-af", "silencedetect=noise=-38dB:d=0.12", "-f", "null", "-",
+        capture=True,
+    )
     starts = [float(value) for value in re.findall(r"silence_start: ([0-9.]+)", output)]
     ends = [float(value) for value in re.findall(r"silence_end: ([0-9.]+)", output)]
     return list(zip(starts, ends))
@@ -90,7 +98,6 @@ def build_timing(boundaries: list[dict], speed: float, voice_start: float, fitte
     scene_word_counts = [max(1, len(words(str(scene.get("voiceLine", ""))))) for scene in PLAN["scenes"]]
     total_words = sum(scene_word_counts)
     if len(boundaries) < max(3, int(total_words * 0.6)):
-        # Safe fallback: weighted timing across the continuous narration duration.
         boundaries = []
         cursor = 0
         for count in scene_word_counts:
@@ -104,9 +111,9 @@ def build_timing(boundaries: list[dict], speed: float, voice_start: float, fitte
     for index, (scene, count) in enumerate(zip(PLAN["scenes"], scene_word_counts)):
         first = min(word_cursor, len(scaled) - 1)
         next_first = min(word_cursor + count, len(scaled))
-        start = 0.0 if index == 0 else max(0.0, scaled[first]["time"] - 0.07)
+        start = 0.0 if index == 0 else max(0.0, scaled[first]["time"] - 0.08)
         if index + 1 < len(scene_word_counts) and next_first < len(scaled):
-            end = max(start + 0.75, scaled[next_first]["time"] - 0.05)
+            end = max(start + 0.75, scaled[next_first]["time"] - 0.04)
         else:
             end = min(DURATION, voice_start + fitted_duration + 0.42)
         timings.append({
@@ -122,7 +129,6 @@ def build_timing(boundaries: list[dict], speed: float, voice_start: float, fitte
         })
         word_cursor += count
 
-    # Scene boundaries follow the spoken words; no independent delayed animation timeline remains.
     for index, timing in enumerate(timings):
         start = 0.0 if index == 0 else timing["startOnTimeline"]
         end = timings[index + 1]["startOnTimeline"] if index + 1 < len(timings) else DURATION
@@ -156,7 +162,6 @@ async def main() -> None:
             f"{atempo_chain(speed)},"
             "highpass=f=68,lowpass=f=12500,"
             "acompressor=threshold=-20dB:ratio=1.65:attack=10:release=170,"
-            "deesser=i=0.35:m=0.45:f=0.55,"
             "alimiter=limit=0.92"
         ),
         "-ar", str(SAMPLE_RATE), "-ac", "2", str(narration)
@@ -164,11 +169,15 @@ async def main() -> None:
     fitted_duration = probe_duration(narration)
 
     final = OUT_DIR / "final.wav"
+    delay_ms = int(voice_start * 1000)
     run(
         "ffmpeg", "-y",
         "-f", "lavfi", "-i", f"anullsrc=r={SAMPLE_RATE}:cl=stereo:d={DURATION}",
         "-i", str(narration),
-        "-filter_complex", f"[1:a]adelay={int(voice_start*1000)}|{int(voice_start*1000)}[v];[0:a][v]amix=inputs=2:duration=first:normalize=0,atrim=0:{DURATION},alimiter=limit=0.93[out]",
+        "-filter_complex", (
+            f"[1:a]adelay={delay_ms}|{delay_ms}[v];"
+            f"[0:a][v]amix=inputs=2:duration=first:normalize=0,atrim=0:{DURATION},alimiter=limit=0.93[out]"
+        ),
         "-map", "[out]", "-ar", str(SAMPLE_RATE), "-ac", "2", str(final)
     )
 
