@@ -19,6 +19,7 @@ DURATION = float(PLAN["duration"])
 VOICE = os.getenv("VOICE") or ("tr-TR-AhmetNeural" if PLAN["language"] == "tr" else "en-US-GuyNeural")
 VOICE_RATE = os.getenv("VOICE_RATE", "+2%")
 SAMPLE_RATE = 48_000
+TARGET_SAMPLES = int(round(DURATION * SAMPLE_RATE))
 
 
 def run(*args: str, capture: bool = False) -> str:
@@ -34,6 +35,18 @@ def probe_duration(path: Path) -> float:
         "-of", "default=nw=1:nk=1", str(path), capture=True,
     )
     return float(output.splitlines()[0])
+
+
+def probe_samples(path: Path) -> int:
+    output = run(
+        "ffprobe", "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=duration_ts", "-of", "default=nw=1:nk=1",
+        str(path), capture=True,
+    )
+    first = output.splitlines()[0].strip() if output.splitlines() else ""
+    if first and first != "N/A":
+        return int(first)
+    return int(round(probe_duration(path) * SAMPLE_RATE))
 
 
 def words(value: str) -> list[str]:
@@ -114,13 +127,10 @@ def planned_removals(silences: list[tuple[float, float]], duration: float) -> li
         if gap < 0.36:
             continue
         if start <= 0.25:
-            # Remove encoder/voice leading silence but retain a tiny natural intake.
             remove_start, remove_end = 0.0, max(0.0, end - 0.03)
         elif end >= duration - 0.30:
-            # Keep only a short release at the end of speech.
             remove_start, remove_end = min(duration, start + 0.04), duration
         else:
-            # Preserve 120 ms of the natural pause and remove only its long middle.
             remove_start, remove_end = start + 0.06, end - 0.06
         if remove_end - remove_start > 0.04:
             removals.append((remove_start, remove_end))
@@ -276,7 +286,7 @@ async def main() -> None:
             f"{atempo_chain(speed)},"
             "highpass=f=68,lowpass=f=11000,"
             "acompressor=threshold=-20dB:ratio=1.65:attack=10:release=170,"
-            "alimiter=limit=0.92"
+            "alimiter=limit=0.92:latency=1"
         ),
         "-ar", str(SAMPLE_RATE), "-ac", "2", str(narration),
     )
@@ -286,15 +296,23 @@ async def main() -> None:
     delay_ms = int(voice_start * 1000)
     run(
         "ffmpeg", "-y",
-        "-f", "lavfi", "-i", f"anullsrc=r={SAMPLE_RATE}:cl=stereo:d={DURATION}",
+        "-f", "lavfi", "-i", f"anullsrc=r={SAMPLE_RATE}:cl=stereo:d={DURATION + 0.25}",
         "-i", str(narration),
         "-filter_complex", (
             f"[1:a]adelay={delay_ms}|{delay_ms}[v];"
-            f"[0:a][v]amix=inputs=2:duration=first:normalize=0,"
-            f"atrim=0:{DURATION},alimiter=limit=0.93[out]"
+            "[0:a][v]amix=inputs=2:duration=longest:normalize=0,"
+            "alimiter=limit=0.93:latency=1,"
+            f"atrim=start_sample=0:end_sample={TARGET_SAMPLES},"
+            "asetpts=N/SR/TB[out]"
         ),
         "-map", "[out]", "-ar", str(SAMPLE_RATE), "-ac", "2", str(final),
     )
+
+    final_samples = probe_samples(final)
+    if final_samples != TARGET_SAMPLES:
+        raise RuntimeError(
+            f"Final WAV sample lock failed: {final_samples} != {TARGET_SAMPLES}"
+        )
 
     silences = detect_silence(final)
     internal = [(start, end) for start, end in silences if start > 0.25 and end < DURATION - 0.50]
@@ -309,6 +327,8 @@ async def main() -> None:
     (OUT_DIR / "scene-timing.json").write_text(json.dumps({
         "mode": "continuous-word-timed",
         "duration": DURATION,
+        "targetSamples": TARGET_SAMPLES,
+        "finalSamples": final_samples,
         "voice": VOICE,
         "voiceRate": VOICE_RATE,
         "rawDuration": raw_duration,
@@ -323,7 +343,7 @@ async def main() -> None:
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     print(
         f"V3 continuous narration ready: {fitted_duration:.2f}s, speed {speed:.2f}x, "
-        f"removed {removed_seconds:.2f}s, max gap {max_gap:.2f}s"
+        f"removed {removed_seconds:.2f}s, max gap {max_gap:.2f}s, samples {final_samples}"
     )
 
 
