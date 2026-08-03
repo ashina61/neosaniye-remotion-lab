@@ -1,12 +1,12 @@
 import React from 'react';
 import {Composition} from 'remotion';
-import {AutoShortV2Enhanced, AUTO_FACTORY_V2_ENHANCED_FRAMES} from './FilmEngineV2';
+import {AutoShortV3, AUTO_FACTORY_V3_FRAMES} from './AutoShortV3';
 
-export const AutoFactoryRoot: React.FC = () => (
+export const AutoFactoryRoot:React.FC=()=> (
   <Composition
     id="NeoSaniyeAuto"
-    component={AutoShortV2Enhanced}
-    durationInFrames={AUTO_FACTORY_V2_ENHANCED_FRAMES}
+    component={AutoShortV3}
+    durationInFrames={AUTO_FACTORY_V3_FRAMES}
     fps={30}
     width={1080}
     height={1920}
