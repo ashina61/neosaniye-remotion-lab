@@ -1,0 +1,72 @@
+{
+  "history": [
+    "How the printing press changed the world",
+    "Why the Roman Empire split in two",
+    "How the Silk Road actually worked",
+    "How the Black Death changed Europe",
+    "Why the Berlin Wall was built",
+    "How the Suez Canal reshaped global trade",
+    "Why the Mongol Empire expanded so quickly",
+    "Why the Industrial Revolution began in Britain"
+  ],
+  "science": [
+    "Why Earth's core is still hot",
+    "How antibiotic resistance develops",
+    "How black holes bend time",
+    "What the human brain does during sleep",
+    "How vaccines train the immune system",
+    "Why earthquakes cannot be predicted precisely",
+    "How DNA copies itself",
+    "What quantum entanglement really means"
+  ],
+  "economy": [
+    "Why inflation reduces the value of money",
+    "How the dollar became the world's trade currency",
+    "Why central banks raise interest rates",
+    "Why gold often rises during crises",
+    "How oil prices affect the world economy",
+    "How the Great Depression began",
+    "How banks create money from deposits",
+    "Why countries default on their debt"
+  ],
+  "geopolitics": [
+    "Why the Strait of Hormuz matters so much",
+    "How the war between Russia and Ukraine began",
+    "Why Taiwan became the center of global chip production",
+    "Why NATO was created",
+    "Why the Arctic became a new zone of competition",
+    "Why the South China Sea is disputed",
+    "How North Korea became a nuclear power",
+    "How strategic straits shape world politics"
+  ],
+  "technology": [
+    "How internet packets travel around the world",
+    "How GPS calculates your location",
+    "How artificial intelligence generates images",
+    "How the transistor built the modern world",
+    "Why manufacturing advanced chips is so difficult",
+    "How QR codes work",
+    "Where cloud computing actually runs",
+    "How lithium-ion batteries store energy"
+  ],
+  "mystery": [
+    "How D. B. Cooper disappeared",
+    "Why the Voynich manuscript remains undeciphered",
+    "What happened at Dyatlov Pass",
+    "Why the Mary Celeste was found abandoned",
+    "What Cicada 3301 really was",
+    "What caused the Tunguska explosion",
+    "How the Antikythera mechanism worked",
+    "What happened to the Roanoke colony"
+  ],
+  "nature": [
+    "How bees find their way home",
+    "Why octopuses are so intelligent",
+    "How volcanic lightning forms",
+    "How whales communicate across oceans",
+    "How ants manage enormous colonies",
+    "How the northern lights form",
+    "Why deserts become cold at night",
+    "How ocean currents change the climate"
+  ]
+}
