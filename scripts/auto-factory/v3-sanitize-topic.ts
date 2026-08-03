@@ -14,6 +14,13 @@ const normalize = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const containsNormalizedPhrase = (text: string, phrase: string) => {
+  const haystack = normalize(text);
+  const needle = normalize(phrase);
+  if (!needle) return false;
+  return ` ${haystack} `.includes(` ${needle} `);
+};
+
 const topic = normalize(String(plan.topic ?? ''));
 const profile = String(plan.v3Profile ?? plan.v3_profile ?? '');
 const isAntibioticResistance =
@@ -37,6 +44,8 @@ const replacements: Array<[RegExp, string]> = [
 
 const ruleKeys = new Set([
   'forbidden',
+  'forbiddenTags',
+  'forbidden_tags',
   'forbiddenConcepts',
   'forbidden_concepts',
   'blockedConcepts',
@@ -88,13 +97,15 @@ if (isAntibioticResistance) {
     'bagisiklik hafizasi',
     'vaccine',
     'antibody',
-  ].map(normalize);
+  ];
   const leaks: string[] = [];
 
   for (const [index, scene] of (plan.scenes as unknown[]).entries()) {
-    const haystack = ` ${normalize(JSON.stringify(contentOnly(scene)))} `;
+    const searchableContent = JSON.stringify(contentOnly(scene));
     for (const term of forbiddenPhrases) {
-      if (haystack.includes(` ${term} `)) leaks.push(`scene-${index + 1}: ${term}`);
+      if (containsNormalizedPhrase(searchableContent, term)) {
+        leaks.push(`scene-${index + 1}: ${term}`);
+      }
     }
   }
 
@@ -102,13 +113,13 @@ if (isAntibioticResistance) {
 
   plan.topicSanitized = true;
   plan.topicSanitizerProfile = 'antibiotic-resistance';
-  plan.topicSanitizerVersion = 2;
+  plan.topicSanitizerVersion = 3;
 
   try {
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
     manifest.topicSanitized = true;
     manifest.topicSanitizerProfile = 'antibiotic-resistance';
-    manifest.topicSanitizerVersion = 2;
+    manifest.topicSanitizerVersion = 3;
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   } catch {
     // Manifest is optional during local planning; plan validation remains authoritative.
