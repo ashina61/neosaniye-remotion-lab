@@ -130,11 +130,29 @@ jobs:
         id: plan
         run: npm run auto:plan
 
+      - name: Normalize scene count and narration density
+        id: density
+        run: npx tsx scripts/auto-factory/normalize-scene-density.ts
+
       - name: Generate optional AI image layers
         run: npm run auto:images
 
-      - name: Generate scene-locked neural narration and restrained SFX
-        run: npm run auto:audio
+      - name: Generate and validate scene-locked narration
+        run: |
+          SYNC_OK=0
+          for ATTEMPT in 1 2 3; do
+            echo "TTS sync attempt ${ATTEMPT}/3"
+            npm run auto:audio
+            if python3 scripts/auto-factory/preflight-sync.py; then
+              SYNC_OK=1
+              break
+            fi
+            echo "Yoğun cümleler otomatik kısaltıldı; TTS yeniden üretilecek."
+          done
+          if [ "$SYNC_OK" -ne 1 ]; then
+            echo "Sahne-ses senkronu üç denemede güvenli sınıra giremedi."
+            exit 1
+          fi
 
       - name: Typecheck
         run: npm run typecheck
@@ -197,9 +215,9 @@ jobs:
             echo ""
             echo "**Süre:** ${{ steps.plan.outputs.duration }} saniye"
             echo ""
-            echo "**Sahne:** ${{ steps.plan.outputs.scene_count }}"
+            echo "**Sahne:** ${{ steps.density.outputs.scene_count }}"
             echo ""
-            echo "**Ses:** Sahne bazlı neural TTS — görselle kilitli"
+            echo "**Ses:** Sahne bazlı neural TTS — gerçek TTS süresiyle render öncesi doğrulandı"
             echo ""
             echo "**Arka plan:** ${MUSIC_MODE}"
             echo ""
