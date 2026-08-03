@@ -1,61 +1,61 @@
-name: NeoSaniye Auto Factory V3
+name: NeoSaniye Auto Factory V3.2
 
 on:
   workflow_dispatch:
     inputs:
       topic_mode:
-        description: Konu nasıl seçilsin?
+        description: How should the topic be selected?
         required: true
         default: random
         type: choice
         options: [random, custom]
       topic:
-        description: Özel konu (topic_mode=custom ise)
+        description: Custom topic (used only when topic_mode=custom)
         required: false
         type: string
       category:
-        description: Rastgele konu kategorisi
+        description: Random topic category
         required: true
         default: any
         type: choice
         options: [any, history, science, economy, geopolitics, technology, mystery, nature]
       duration:
-        description: Hedef süre
+        description: Target duration
         required: true
         default: '46'
         type: choice
         options: ['42', '46', '50']
       language:
-        description: Anlatım dili
+        description: Narration language
         required: true
-        default: tr
+        default: en
         type: choice
-        options: [tr, en]
+        options: [en, tr]
       voice:
-        description: Doğal neural ses
+        description: Neural voice
         required: true
-        default: tr-TR-AhmetNeural
+        default: en-US-GuyNeural
         type: choice
-        options: [tr-TR-AhmetNeural, tr-TR-EmelNeural, en-US-GuyNeural, en-US-JennyNeural]
+        options: [en-US-GuyNeural, en-US-JennyNeural, tr-TR-AhmetNeural, tr-TR-EmelNeural]
       visual_mode:
-        description: Görsel üretim modu
+        description: Visual generation mode
         required: true
         default: procedural
         type: choice
         options: [procedural, hybrid, ai-heavy]
       research_mode:
-        description: Araştırma kaynağı
+        description: Research source
         required: true
         default: wikipedia
         type: choice
         options: [wikipedia, none]
       strict_ai:
-        description: AI planı üretilemezse workflow dursun mu?
+        description: Stop when AI planning fails
         required: true
         default: false
         type: boolean
       seed:
-        description: Aynı sonucu tekrarlamak için sayı; boş bırakılabilir
+        description: Optional deterministic seed
         required: false
         type: string
   pull_request:
@@ -63,6 +63,7 @@ on:
       - 'src/auto-factory/**'
       - 'scripts/auto-factory/**'
       - 'config/auto-factory-topics.json'
+      - 'config/auto-factory-topics.en.json'
       - 'public/auto-factory/plan.json'
       - '.github/workflows/auto-short-factory.yml'
       - 'package.json'
@@ -71,7 +72,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: auto-factory-v3-${{ github.ref }}-${{ github.run_id }}
+  group: auto-factory-v32-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -80,17 +81,18 @@ jobs:
     timeout-minutes: 55
     env:
       TOPIC_MODE: ${{ inputs.topic_mode || 'custom' }}
-      TOPIC: ${{ inputs.topic || 'Antibiyotik direnci nasıl oluşuyor' }}
+      TOPIC: ${{ inputs.topic || 'How antibiotic resistance develops' }}
       CATEGORY: ${{ inputs.category || 'science' }}
       TARGET_DURATION: ${{ inputs.duration || '46' }}
-      LANGUAGE: ${{ inputs.language || 'tr' }}
-      VOICE: ${{ inputs.voice || 'tr-TR-AhmetNeural' }}
+      LANGUAGE: ${{ inputs.language || 'en' }}
+      VOICE: ${{ inputs.voice || 'en-US-GuyNeural' }}
       VOICE_RATE: '+2%'
       VISUAL_MODE: ${{ inputs.visual_mode || 'procedural' }}
       MUSIC_MODE: off
       RESEARCH_MODE: ${{ inputs.research_mode || 'wikipedia' }}
       STRICT_AI: ${{ inputs.strict_ai || 'false' }}
       SEED: ${{ inputs.seed || github.run_number }}
+      TOPIC_POOL_PATH: ${{ (inputs.language || 'en') == 'en' && 'config/auto-factory-topics.en.json' || 'config/auto-factory-topics.json' }}
       POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
       POLLINATIONS_TEXT_MODEL: ${{ vars.POLLINATIONS_TEXT_MODEL || 'openai-fast' }}
       POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL || 'zimage' }}
@@ -116,6 +118,15 @@ jobs:
           npm install --no-audit --no-fund
           python -m pip install --disable-pip-version-check edge-tts
 
+      - name: Validate language and voice
+        run: |
+          case "${LANGUAGE}:${VOICE}" in
+            en:en-*) ;;
+            tr:tr-*) ;;
+            *) echo "Voice ${VOICE} does not match language ${LANGUAGE}"; exit 1 ;;
+          esac
+          echo "Language=${LANGUAGE} Voice=${VOICE} TopicPool=${TOPIC_POOL_PATH}"
+
       - name: Research and build base plan
         id: plan
         run: npm run auto:plan
@@ -131,13 +142,13 @@ jobs:
       - name: Generate optional image layers
         run: npm run auto:images
 
-      - name: Generate one continuous narration and word timing
+      - name: Generate continuous narration and word timing
         run: npm run auto:audio
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Render Full HD V3 documentary
+      - name: Render Full HD V3.2 documentary
         run: npm run render:auto
 
       - name: Lock final duration and loudness
@@ -157,13 +168,13 @@ jobs:
             -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 48000 -ac 2 \
             -t "${TARGET_DURATION}" -movflags +faststart out/auto-factory-mobile.mp4
 
-      - name: Build V3 contact sheet
+      - name: Build V3.2 contact sheet
         run: |
           mkdir -p out/review
           ffmpeg -y -i out/auto-factory-fullhd.mp4 \
             -vf "fps=1/3.2,scale=270:-1,tile=3x5" -frames:v 1 out/review/contact.jpg
 
-      - name: V3 quality control
+      - name: V3.2 quality control
         run: npm run auto:qc
 
       - name: Print QC diagnostics
@@ -207,24 +218,28 @@ jobs:
         if: ${{ always() }}
         run: |
           {
-            echo "# NeoSaniye Auto Factory V3"
+            echo "# NeoSaniye Auto Factory V3.2"
             echo ""
-            echo "**Konu:** ${{ steps.plan.outputs.topic }}"
+            echo "**Topic:** ${{ steps.plan.outputs.topic }}"
             echo ""
-            echo "**Profil:** ${{ steps.v3.outputs.profile }}"
+            echo "**Language / voice:** ${LANGUAGE} / ${VOICE}"
             echo ""
-            echo "**Sahne:** ${{ steps.v3.outputs.scene_count }}"
+            echo "**Profile:** ${{ steps.v3.outputs.profile }}"
             echo ""
-            echo "**Ses:** Tam cümleli tek master + kesin sahne zamanları"
+            echo "**Scenes:** ${{ steps.v3.outputs.scene_count }}"
             echo ""
-            echo "**Müzik:** Kapalı"
+            echo "**Branding:** NeoSaniye watermark, top-left safe area"
+            echo ""
+            echo "**Audio:** one continuous master with word timing"
+            echo ""
+            echo "**Music:** off"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload V3 diagnostics and artifact
+      - name: Upload V3.2 diagnostics and artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: neosaniye-v3-${{ steps.plan.outputs.slug || 'diagnostics' }}
+          name: neosaniye-v32-${{ steps.plan.outputs.slug || 'diagnostics' }}
           if-no-files-found: warn
           path: |
             out/${{ steps.plan.outputs.slug }}-package.zip
