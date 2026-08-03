@@ -30,15 +30,31 @@ export const VisualBeatSchema = z.object({
   action: z.enum(['reveal','connect','focus','stamp','swap','highlight','eliminate','multiply','transfer'])
 });
 
+export const SemanticActionSchema = z.enum([
+  'reveal','transform','compare','connect','spread','filter','assemble','trace','multiply','collapse'
+]);
+
+export const TopicProfileSchema = z.object({
+  visualWorld: z.string().min(3).max(48),
+  primaryMotifs: z.array(z.string().min(2).max(72)).min(4).max(14),
+  secondaryMotifs: z.array(z.string().min(2).max(72)).min(2).max(14),
+  forbiddenMotifs: z.array(z.string().min(2).max(72)).max(14).default([]),
+  paletteMood: z.string().min(2).max(48).default('editorial-documentary'),
+  preferredVisualKinds: z.array(VisualKindSchema).min(4).max(14),
+  groundingVersion: z.number().int().min(1).default(1)
+});
+
 export const ScenePlanSchema = z.object({
   id: z.number().int().positive(),
   start: z.number().nonnegative(),
   duration: z.number().positive(),
   title: z.string().min(1).max(60),
   kicker: z.string().max(80),
-  voiceLine: z.string().max(260).default(''),
+  voiceLine: z.string().max(320).default(''),
   voiceStart: z.number().min(0).max(1.2).default(0.08),
   voiceEndPadding: z.number().min(0.02).max(0.8).default(0.12),
+  voiceRate: z.string().regex(/^[+-]\d+%$/).default('+0%'),
+  voicePitch: z.string().regex(/^[+-]\d+Hz$/).default('-2Hz'),
   visualKind: VisualKindSchema,
   layout: LayoutSchema,
   transition: TransitionSchema,
@@ -51,18 +67,25 @@ export const ScenePlanSchema = z.object({
   imagePrompt: z.string().min(20),
   sourceNote: z.string().max(160).optional(),
   asset: z.string().optional(),
-  sceneGoal: z.string().min(3).max(180).default('Explain the spoken line visually'),
+  sceneGoal: z.string().min(3).max(360).default('Explain the spoken line visually'),
   heroVisual: z.string().min(2).max(90).default('main subject'),
-  supportVisuals: z.array(z.string().min(1).max(72)).min(1).max(5).default(['supporting detail']),
-  visualSignature: z.string().min(3).max(120).default('unique-scene'),
-  conceptTags: z.array(z.string().min(1).max(36)).max(10).default([]),
-  forbiddenTags: z.array(z.string().min(1).max(36)).max(10).default([]),
+  supportVisuals: z.array(z.string().min(1).max(72)).min(1).max(6).default(['supporting detail']),
+  visualSignature: z.string().min(3).max(160).default('unique-scene'),
+  conceptTags: z.array(z.string().min(1).max(36)).max(14).default([]),
+  forbiddenTags: z.array(z.string().min(1).max(36)).max(14).default([]),
   alignmentScore: z.number().min(0).max(1).default(0),
   continuityGroup: z.string().min(1).max(36).default('main'),
   shotType: z.enum([
     'macro','wide','overhead','profile','diagram','dossier','comparison',
     'hero','process','cinematic-wide'
-  ]).default('diagram')
+  ]).default('diagram'),
+  visualWorld: z.string().min(3).max(48).default('general-explainer'),
+  primaryMotif: z.string().min(2).max(72).default('main subject'),
+  secondaryMotif: z.string().min(2).max(72).default('supporting detail'),
+  mustShow: z.array(z.string().min(2).max(90)).min(2).max(7).default(['main subject','supporting detail']),
+  avoid: z.array(z.string().min(2).max(90)).max(8).default([]),
+  subjectTokens: z.array(z.string().min(2).max(36)).min(2).max(14).default(['main','subject']),
+  semanticAction: SemanticActionSchema.default('reveal')
 });
 
 export const FactoryPlanSchema = z.object({
@@ -81,16 +104,18 @@ export const FactoryPlanSchema = z.object({
   palette: z.object({paper:z.string(),ink:z.string(),red:z.string(),teal:z.string(),gold:z.string(),blue:z.string()}),
   research: z.array(z.object({title:z.string(),url:z.string().url(),excerpt:z.string()})).max(8),
   scenes: z.array(ScenePlanSchema).min(10).max(20),
+  topicProfile: TopicProfileSchema.optional(),
   v3: z.object({
     planner: z.literal('topic-locked'),
     audioMode: z.literal('continuous-word-timed'),
     maxSilenceGap: z.number().max(0.35),
     repetitionThreshold: z.number().min(0).max(1),
     profile: z.string()
-  }).optional()
+  }).passthrough().optional()
 });
 
 export type FactoryPlan = z.infer<typeof FactoryPlanSchema>;
 export type ScenePlan = z.infer<typeof ScenePlanSchema>;
 export type VisualKind = z.infer<typeof VisualKindSchema>;
 export type VisualBeat = z.infer<typeof VisualBeatSchema>;
+export type TopicProfile = z.infer<typeof TopicProfileSchema>;
