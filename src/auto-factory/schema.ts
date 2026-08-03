@@ -26,7 +26,7 @@ export const SfxSchema = z.enum(['impact','paper','stamp','click','crack','pulse
 
 export const VisualBeatSchema = z.object({
   at: z.number().min(0).max(1),
-  label: z.string().min(1).max(54),
+  label: z.string().min(1).max(100),
   action: z.enum(['reveal','connect','focus','stamp','swap','highlight','eliminate','multiply','transfer'])
 });
 
@@ -59,7 +59,10 @@ export const ScenePlanSchema = z.object({
   forbiddenTags: z.array(z.string().min(1).max(36)).max(10).default([]),
   alignmentScore: z.number().min(0).max(1).default(0),
   continuityGroup: z.string().min(1).max(36).default('main'),
-  shotType: z.enum(['macro','wide','overhead','profile','diagram','dossier','comparison']).default('diagram')
+  shotType: z.enum([
+    'macro','wide','overhead','profile','diagram','dossier','comparison',
+    'hero','process','cinematic-wide'
+  ]).default('diagram')
 });
 
 export const FactoryPlanSchema = z.object({
