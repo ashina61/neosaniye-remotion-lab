@@ -33,8 +33,7 @@ const compactLabel = (value: string, maxLength: number) => {
   return result || words[0];
 };
 
-const tokens = (value: string) =>
-  normalize(value).split(' ').filter((word) => word.length > 2);
+const tokens = (value: string) => normalize(value).split(' ').filter((word) => word.length > 2);
 
 const alignmentScore = (voiceLine: string, heroVisual: string, supportVisuals: string[]) => {
   const voice = unique(tokens(voiceLine));
@@ -69,7 +68,7 @@ const buildScene = (sourceScenes: Scene[], voiceLine: string, overrides: Partial
       {at: 0.08, label: heroVisual, action: 'reveal'},
       {at: 0.28, label: supportVisuals[0] || heroVisual, action: 'focus'},
       {at: 0.50, label: supportVisuals[1] || supportVisuals[0] || heroVisual, action: 'connect'},
-      {at: 0.72, label: supportVisuals[2] || heroVisual, action: 'hold'},
+      {at: 0.72, label: supportVisuals[2] || heroVisual, action: 'highlight'},
     ],
     visualSignature: `readable-v2:${sourceScenes.map((scene) => scene.id).join('-')}:${heroVisual}`,
     alignmentScore: alignmentScore(sentence, heroVisual, supportVisuals),
