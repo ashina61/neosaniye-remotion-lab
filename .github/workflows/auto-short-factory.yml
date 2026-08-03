@@ -166,6 +166,29 @@ jobs:
       - name: V3 quality control
         run: npm run auto:qc
 
+      - name: Print QC diagnostics
+        if: ${{ always() }}
+        run: |
+          if [ -f out/production-report.json ]; then
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('out/production-report.json').read_text(encoding='utf-8'))
+          failed = [name for name, passed in report.get('checks', {}).items() if not passed]
+          print('QC_STATUS=' + str(report.get('status')))
+          print('QC_FAILED_CHECKS=' + (','.join(failed) if failed else 'none'))
+          for key in (
+              'scene_count', 'minimum_scene_duration', 'max_internal_silence',
+              'minimum_post_speech_hold', 'final_audio_tail', 'scene_timing_errors',
+              'caption_errors', 'forbidden_concept_leaks'
+          ):
+              if key in report:
+                  print(f'QC_{key.upper()}={report[key]}')
+          PY
+          else
+            echo 'QC_REPORT_MISSING=true'
+          fi
+
       - name: Build downloadable package
         run: |
           SLUG='${{ steps.plan.outputs.slug }}'
@@ -181,6 +204,7 @@ jobs:
           cd out/package && zip -qr "../$SLUG-package.zip" "$SLUG"
 
       - name: Write summary
+        if: ${{ always() }}
         run: |
           {
             echo "# NeoSaniye Auto Factory V3"
@@ -191,15 +215,17 @@ jobs:
             echo ""
             echo "**Sahne:** ${{ steps.v3.outputs.scene_count }}"
             echo ""
-            echo "**Ses:** Tek kesintisiz neural anlatım + kelime zamanlı sahneler"
+            echo "**Ses:** Tam cümleli tek master + kesin sahne zamanları"
             echo ""
             echo "**Müzik:** Kapalı"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload completed V3 artifact
+      - name: Upload V3 diagnostics and artifact
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: neosaniye-v3-${{ steps.plan.outputs.slug }}
+          name: neosaniye-v3-${{ steps.plan.outputs.slug || 'diagnostics' }}
+          if-no-files-found: warn
           path: |
             out/${{ steps.plan.outputs.slug }}-package.zip
             out/auto-factory-fullhd.mp4
@@ -208,5 +234,6 @@ jobs:
             out/review/contact.jpg
             public/auto-factory/plan.json
             public/auto-factory/manifest.json
+            public/auto-factory/audio/final.wav
             public/auto-factory/audio/scene-timing.json
           retention-days: 7
