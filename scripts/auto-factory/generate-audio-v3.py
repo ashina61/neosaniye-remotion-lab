@@ -29,7 +29,10 @@ def run(*args: str, capture: bool = False) -> str:
 
 
 def probe_duration(path: Path) -> float:
-    output = run("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path), capture=True)
+    output = run(
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=nw=1:nk=1", str(path), capture=True,
+    )
     return float(output.splitlines()[0])
 
 
@@ -59,7 +62,6 @@ def continuous_text() -> str:
         line = re.sub(r"\s+", " ", line)
         line = re.sub(r"[,.!?;:]+", "", line)
         lines.append(line)
-    # Scene boundaries come from word timing, not punctuation pauses.
     return " ".join(lines) + "."
 
 
@@ -82,15 +84,115 @@ async def synthesize_continuous() -> tuple[Path, list[dict]]:
     return mp3, boundaries
 
 
-def detect_silence(path: Path) -> list[tuple[float, float]]:
+def detect_silence(path: Path, minimum: float = 0.12) -> list[tuple[float, float]]:
     output = run(
         "ffmpeg", "-hide_banner", "-i", str(path),
-        "-af", "silencedetect=noise=-38dB:d=0.12", "-f", "null", "-",
+        "-af", f"silencedetect=noise=-38dB:d={minimum}", "-f", "null", "-",
         capture=True,
     )
     starts = [float(value) for value in re.findall(r"silence_start: ([0-9.]+)", output)]
     ends = [float(value) for value in re.findall(r"silence_end: ([0-9.]+)", output)]
     return list(zip(starts, ends))
+
+
+def merge_ranges(ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    merged: list[list[float]] = []
+    for start, end in sorted(ranges):
+        if end <= start:
+            continue
+        if not merged or start > merged[-1][1] + 0.005:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return [(start, end) for start, end in merged]
+
+
+def planned_removals(silences: list[tuple[float, float]], duration: float) -> list[tuple[float, float]]:
+    removals: list[tuple[float, float]] = []
+    for start, end in silences:
+        gap = end - start
+        if gap < 0.36:
+            continue
+        if start <= 0.25:
+            # Remove encoder/voice leading silence but retain a tiny natural intake.
+            remove_start, remove_end = 0.0, max(0.0, end - 0.03)
+        elif end >= duration - 0.30:
+            # Keep only a short release at the end of speech.
+            remove_start, remove_end = min(duration, start + 0.04), duration
+        else:
+            # Preserve 120 ms of the natural pause and remove only its long middle.
+            remove_start, remove_end = start + 0.06, end - 0.06
+        if remove_end - remove_start > 0.04:
+            removals.append((remove_start, remove_end))
+    return merge_ranges(removals)
+
+
+def complement_ranges(removals: list[tuple[float, float]], duration: float) -> list[tuple[float, float]]:
+    kept: list[tuple[float, float]] = []
+    cursor = 0.0
+    for start, end in removals:
+        if start > cursor + 0.005:
+            kept.append((cursor, start))
+        cursor = max(cursor, end)
+    if cursor < duration - 0.005:
+        kept.append((cursor, duration))
+    return kept
+
+
+def compact_audio(decoded: Path) -> tuple[Path, list[tuple[float, float]], float]:
+    decoded_duration = probe_duration(decoded)
+    raw_silences = detect_silence(decoded)
+    removals = planned_removals(raw_silences, decoded_duration)
+    compacted = OUT_DIR / "narration-compacted.wav"
+    if not removals:
+        shutil.copyfile(decoded, compacted)
+        return compacted, [], 0.0
+
+    kept = complement_ranges(removals, decoded_duration)
+    if not kept:
+        raise RuntimeError("Silence compactor removed the whole narration")
+
+    filter_parts: list[str] = []
+    labels: list[str] = []
+    for index, (start, end) in enumerate(kept):
+        label = f"k{index}"
+        labels.append(f"[{label}]")
+        filter_parts.append(
+            f"[0:a]atrim=start={start:.6f}:end={end:.6f},asetpts=PTS-STARTPTS[{label}]"
+        )
+    if len(kept) == 1:
+        filter_parts.append(f"{labels[0]}anull[out]")
+    else:
+        filter_parts.append(f"{''.join(labels)}concat=n={len(kept)}:v=0:a=1[out]")
+    run(
+        "ffmpeg", "-y", "-i", str(decoded),
+        "-filter_complex", ";".join(filter_parts), "-map", "[out]",
+        "-ar", str(SAMPLE_RATE), "-ac", "2", str(compacted),
+    )
+    removed_seconds = sum(end - start for start, end in removals)
+    return compacted, removals, removed_seconds
+
+
+def compact_timestamp(timestamp: float, removals: list[tuple[float, float]]) -> float:
+    removed_before = 0.0
+    for start, end in removals:
+        if timestamp >= end:
+            removed_before += end - start
+            continue
+        if timestamp > start:
+            return max(0.0, start - removed_before)
+        break
+    return max(0.0, timestamp - removed_before)
+
+
+def remap_boundaries(boundaries: list[dict], removals: list[tuple[float, float]]) -> list[dict]:
+    return [
+        {
+            **item,
+            "offset": compact_timestamp(float(item.get("offset", 0)), removals),
+        }
+        for item in boundaries
+    ]
 
 
 def build_timing(boundaries: list[dict], speed: float, voice_start: float, fitted_duration: float) -> list[dict]:
@@ -101,7 +203,11 @@ def build_timing(boundaries: list[dict], speed: float, voice_start: float, fitte
         cursor = 0
         for count in scene_word_counts:
             for _ in range(count):
-                boundaries.append({"offset": cursor * fitted_duration / total_words * speed, "duration": 0.0, "text": ""})
+                boundaries.append({
+                    "offset": cursor * fitted_duration / total_words * speed,
+                    "duration": 0.0,
+                    "text": "",
+                })
                 cursor += 1
 
     scaled = [{**item, "time": voice_start + float(item["offset"]) / speed} for item in boundaries]
@@ -144,26 +250,35 @@ async def main() -> None:
         raise RuntimeError("ffmpeg and ffprobe are required")
 
     raw, boundaries = await synthesize_continuous()
-    raw_duration = probe_duration(raw)
+    decoded = OUT_DIR / "narration-decoded.wav"
+    run(
+        "ffmpeg", "-y", "-i", str(raw),
+        "-ar", str(SAMPLE_RATE), "-ac", "2", str(decoded),
+    )
+    raw_duration = probe_duration(decoded)
+    compacted, removals, removed_seconds = compact_audio(decoded)
+    compacted_duration = probe_duration(compacted)
+    remapped_boundaries = remap_boundaries(boundaries, removals)
+
     voice_start = 0.08
     target_voice = DURATION - voice_start - 0.55
-    speed = raw_duration / target_voice
+    speed = compacted_duration / target_voice
     if speed > 1.22:
         raise RuntimeError(f"Narration is too dense for V3 ({speed:.2f}x required)")
-    if speed < 0.74:
+    if speed < 0.70:
         raise RuntimeError(f"Narration is too short for continuous V3 pacing ({speed:.2f}x)")
-    speed = max(0.74, min(1.22, speed))
+    speed = max(0.70, min(1.22, speed))
 
     narration = OUT_DIR / "narration-continuous.wav"
     run(
-        "ffmpeg", "-y", "-i", str(raw),
+        "ffmpeg", "-y", "-i", str(compacted),
         "-af", (
             f"{atempo_chain(speed)},"
             "highpass=f=68,lowpass=f=11000,"
             "acompressor=threshold=-20dB:ratio=1.65:attack=10:release=170,"
             "alimiter=limit=0.92"
         ),
-        "-ar", str(SAMPLE_RATE), "-ac", "2", str(narration)
+        "-ar", str(SAMPLE_RATE), "-ac", "2", str(narration),
     )
     fitted_duration = probe_duration(narration)
 
@@ -175,18 +290,19 @@ async def main() -> None:
         "-i", str(narration),
         "-filter_complex", (
             f"[1:a]adelay={delay_ms}|{delay_ms}[v];"
-            f"[0:a][v]amix=inputs=2:duration=first:normalize=0,atrim=0:{DURATION},alimiter=limit=0.93[out]"
+            f"[0:a][v]amix=inputs=2:duration=first:normalize=0,"
+            f"atrim=0:{DURATION},alimiter=limit=0.93[out]"
         ),
-        "-map", "[out]", "-ar", str(SAMPLE_RATE), "-ac", "2", str(final)
+        "-map", "[out]", "-ar", str(SAMPLE_RATE), "-ac", "2", str(final),
     )
 
     silences = detect_silence(final)
-    internal = [(start, end) for start, end in silences if start > 0.25 and end < DURATION - 0.5]
+    internal = [(start, end) for start, end in silences if start > 0.25 and end < DURATION - 0.50]
     max_gap = max((end - start for start, end in internal), default=0.0)
     if max_gap > 0.48:
-        raise RuntimeError(f"Continuous narration contains a long internal silence: {max_gap:.2f}s")
+        raise RuntimeError(f"Continuous narration contains a long internal silence after compaction: {max_gap:.2f}s")
 
-    timings = build_timing(boundaries, speed, voice_start, fitted_duration)
+    timings = build_timing(remapped_boundaries, speed, voice_start, fitted_duration)
     PLAN["narration"] = continuous_text()
     PLAN["version"] = 3
     PLAN_PATH.write_text(json.dumps(PLAN, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -196,13 +312,19 @@ async def main() -> None:
         "voice": VOICE,
         "voiceRate": VOICE_RATE,
         "rawDuration": raw_duration,
+        "compactedDuration": compacted_duration,
+        "removedSilenceSeconds": removed_seconds,
+        "removedRanges": removals,
         "fittedDuration": fitted_duration,
         "speed": speed,
         "maxInternalSilence": max_gap,
         "wordBoundaryCount": len(boundaries),
         "scenes": timings,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"V3 continuous narration ready: {fitted_duration:.2f}s, speed {speed:.2f}x, max gap {max_gap:.2f}s")
+    print(
+        f"V3 continuous narration ready: {fitted_duration:.2f}s, speed {speed:.2f}x, "
+        f"removed {removed_seconds:.2f}s, max gap {max_gap:.2f}s"
+    )
 
 
 if __name__ == "__main__":
