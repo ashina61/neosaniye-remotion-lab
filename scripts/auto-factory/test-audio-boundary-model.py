@@ -1,29 +1,23 @@
 from __future__ import annotations
 
-# Regression for run 30856093451: a retained 140 ms consonant tail and the next
-# 25 ms onset cushion were incorrectly followed by another fixed 300 ms silence.
-# Slowing narration to 0.88x stretched those edge cushions and pushed the detected
-# boundary above the 480 ms QC ceiling.
+# Regression for run 30856093451: V3.1 retained 140 ms after each sentence and
+# about 35 ms before the next one, then added another fixed 300 ms silence. A
+# slow natural atempo pass stretched the edge cushions and produced a 0.52 s gap.
 
-BOUNDARY_TARGET = 0.32
 TAIL = 0.14
-ONSET = 0.025
-MIN_INSERTED = 0.035
-MAX_INSERTED = 0.22
-
-
-def inserted_gap(trailing: float, leading: float) -> float:
-    return max(MIN_INSERTED, min(MAX_INSERTED, BOUNDARY_TARGET - trailing - leading))
+ONSET = 0.035
+OLD_EXPLICIT_PAUSE = 0.30
+NEW_EXPLICIT_PAUSE = 0.12
 
 
 for speed in (0.88, 0.94, 1.0, 1.06, 1.12):
-    old_boundary = TAIL / speed + 0.30 + ONSET / speed
-    normalized_trailing = TAIL
-    normalized_leading = ONSET
-    new_inserted = inserted_gap(normalized_trailing, normalized_leading)
-    new_boundary = normalized_trailing + new_inserted + normalized_leading
-    assert old_boundary > 0.44, (speed, old_boundary)
-    assert 0.29 <= new_boundary <= 0.34, (speed, new_boundary)
-    assert new_boundary < 0.46, (speed, new_boundary)
+    old_boundary = TAIL / speed + OLD_EXPLICIT_PAUSE + ONSET / speed
+    new_boundary = TAIL / speed + NEW_EXPLICIT_PAUSE + ONSET / speed
+    visual_hold_after_last_phoneme = TAIL / speed + NEW_EXPLICIT_PAUSE / 2
+
+    assert old_boundary > 0.45, (speed, old_boundary)
+    assert 0.26 <= new_boundary <= 0.33, (speed, new_boundary)
+    assert new_boundary < 0.44, (speed, new_boundary)
+    assert visual_hold_after_last_phoneme >= 0.15, (speed, visual_hold_after_last_phoneme)
 
 print('Audio boundary model regression: PASS')
