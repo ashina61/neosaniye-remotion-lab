@@ -4,7 +4,7 @@ export const VisualKindSchema = z.enum([
   'world-network','currency','timeline','map-route','factory','document','treaty-table',
   'commodity','institution','link-break','mechanism','crowd','biology','portrait-dossier',
   'object-exploded','archive-wall','microbe-field','selection-process','gene-transfer',
-  'before-after','cause-effect','process-flow','evidence-board','map-evolution'
+  'before-after','cause-effect','process-flow','evidence-board','map-evolution','comparison'
 ]);
 
 export const LayoutSchema = z.enum([
@@ -51,8 +51,6 @@ export const ScenePlanSchema = z.object({
   imagePrompt: z.string().min(20),
   sourceNote: z.string().max(160).optional(),
   asset: z.string().optional(),
-
-  // V3: narration and drawing are planned as one unit.
   sceneGoal: z.string().min(3).max(180).default('Explain the spoken line visually'),
   heroVisual: z.string().min(2).max(90).default('main subject'),
   supportVisuals: z.array(z.string().min(1).max(72)).min(1).max(5).default(['supporting detail']),
