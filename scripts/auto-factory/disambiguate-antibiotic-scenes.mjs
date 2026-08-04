@@ -2,8 +2,10 @@ import {readFile, writeFile} from 'node:fs/promises';
 
 const planPath = process.env.PLAN_PATH || 'public/auto-factory/plan.json';
 const plan = JSON.parse(await readFile(planPath, 'utf8'));
+const isEnglishAntibiotic = plan.language === 'en'
+  && /antibiotic resistance|antimicrobial resistance/i.test(String(plan.topic || ''));
 
-if (plan.language === 'en' && /antibiotic resistance|antimicrobial resistance/i.test(String(plan.topic || ''))) {
+if (isEnglishAntibiotic) {
   for (const scene of plan.scenes || []) {
     const line = String(scene.voiceLine || '');
     if (!/removes competitors|more resources/i.test(line)) continue;
@@ -50,10 +52,62 @@ if (plan.language === 'en' && /antibiotic resistance|antimicrobial resistance/i.
     plan.v4.cameraSequence = cameras;
     plan.v4.grammarCount = new Set(grammars).size;
     plan.v4.cameraCount = new Set(cameras).size;
-    plan.v4.semanticDisambiguationVersion = 1;
+    plan.v4.semanticDisambiguationVersion = 2;
   }
-  plan.v3 = {...(plan.v3 || {}), semanticDisambiguationVersion: 1};
+  plan.v3 = {...(plan.v3 || {}), semanticDisambiguationVersion: 2};
+}
+
+const visibleText = (scene) => [
+  scene.title,
+  scene.kicker,
+  scene.voiceLine,
+  scene.sceneGoal,
+  scene.heroVisual,
+  scene.primaryMotif,
+  scene.secondaryMotif,
+  ...(scene.props || []),
+  ...(scene.supportVisuals || []),
+  ...(scene.mustShow || []),
+  ...(scene.beats || []).map((beat) => beat.label),
+].filter(Boolean).map(String);
+
+if (isEnglishAntibiotic) {
+  const turkishWords = /\b(önce|sonra|yanlış|doğru|ilaç|antibiyotik|bakteri|bakteriler|direnç|dirençli|tedavi|hastane|insanlar|hayvanlar|çevre|seçilim|yayılma|çoğalma|kalanlar|gereksiz|kullanım|çözüm|süre|doz)\b/iu;
+  const languageLeaks = [];
+  const semanticErrors = [];
+  const scenes = plan.scenes || [];
+
+  for (const scene of scenes) {
+    for (const value of visibleText(scene)) {
+      if (/[çğıöşüİ]/i.test(value) || turkishWords.test(value)) {
+        languageLeaks.push(`scene ${scene.id}: ${value}`);
+      }
+    }
+    if (!String(scene.semanticLockRule || '').trim()) {
+      semanticErrors.push(`scene ${scene.id}: missing semanticLockRule`);
+    }
+    if (!String(scene.heroVisual || '').trim() || !Array.isArray(scene.mustShow) || scene.mustShow.length < 2) {
+      semanticErrors.push(`scene ${scene.id}: incomplete grounded visual specification`);
+    }
+  }
+
+  for (let index = 1; index < scenes.length; index += 1) {
+    if (scenes[index - 1].semanticLockRule === scenes[index].semanticLockRule) {
+      semanticErrors.push(
+        `scenes ${scenes[index - 1].id}-${scenes[index].id}: repeated semantic template ${scenes[index].semanticLockRule}`,
+      );
+    }
+  }
+
+  if (languageLeaks.length) {
+    throw new Error(`Final English language firewall failed:\n${languageLeaks.slice(0, 12).join('\n')}`);
+  }
+  if (semanticErrors.length) {
+    throw new Error(`Final semantic plan validation failed:\n${semanticErrors.slice(0, 12).join('\n')}`);
+  }
 }
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
-console.log('Antibiotic scene disambiguation passed.');
+console.log(
+  `Antibiotic scene disambiguation passed: scenes=${plan.scenes?.length || 0}, language=${plan.language}`,
+);
