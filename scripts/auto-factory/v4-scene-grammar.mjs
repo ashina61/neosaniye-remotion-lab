@@ -125,7 +125,7 @@ const scenes = Array.isArray(plan.scenes) ? plan.scenes : [];
 if (scenes.length < 8) throw new Error(`V4 requires at least 8 scenes, received ${scenes.length}`);
 
 const world = String(plan.topicProfile?.visualWorld || scenes[0]?.visualWorld || 'general-explainer');
-const artDirection = ART_WORLDS[world] || {
+const artDirectionBase = ART_WORLDS[world] || {
   palette: {
     paper: plan.palette?.paper || '#e5dcc4',
     ink: plan.palette?.ink || '#28231f',
@@ -135,6 +135,12 @@ const artDirection = ART_WORLDS[world] || {
   },
   textures: ['editorial-paper', 'print-grain', 'torn-edge'],
   density: 'medium',
+};
+const artDirection = {
+  world,
+  palette: artDirectionBase.palette,
+  textures: artDirectionBase.textures,
+  density: artDirectionBase.density,
 };
 
 const used = new Map();
@@ -169,12 +175,7 @@ for (let index = 0; index < scenes.length; index += 1) {
   scene.compositionBias = BIASES[(index + (plan.seed || 0)) % BIASES.length];
   scene.layerCount = 7 + ((index + (plan.seed || 0)) % 6);
   scene.matchCutToken = normalize(`${secondary}-${matchTarget}`) || `scene-${index + 1}`;
-  scene.artDirection = {
-    world,
-    palette: artDirection.palette,
-    textures: artDirection.textures,
-    density: artDirection.density,
-  };
+  scene.artDirection = artDirection;
   scene.visualSignature = `v4:${grammar}:${cameraMove}:${scene.compositionBias}:${normalize(primary)}`;
 }
 
