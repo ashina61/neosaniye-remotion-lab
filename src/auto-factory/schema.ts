@@ -34,6 +34,31 @@ export const SemanticActionSchema = z.enum([
   'reveal','transform','compare','connect','spread','filter','assemble','trace','multiply','collapse'
 ]);
 
+export const SceneGrammarSchema = z.enum([
+  'hero-poster','macro-field','selection-field','mechanism-cutaway','cause-chain',
+  'exploded-object','timeline-strip','comparison-scale','map-route','spread-network','evidence-board'
+]);
+
+export const CameraMoveSchema = z.enum([
+  'push-in','pull-out','pan-left','pan-right','orbit','drift-up','drift-down','snap-zoom'
+]);
+
+export const TextModeSchema = z.enum(['headline','integrated','stamp','minimal']);
+export const CompositionBiasSchema = z.enum(['left','right','center','diagonal','full-frame']);
+
+export const ArtDirectionSchema = z.object({
+  world: z.string().min(3).max(48),
+  palette: z.object({
+    paper: z.string(),
+    ink: z.string(),
+    primary: z.string(),
+    secondary: z.string(),
+    highlight: z.string()
+  }),
+  textures: z.array(z.string().min(2).max(48)).min(1).max(6),
+  density: z.enum(['light','medium','dense'])
+});
+
 export const TopicProfileSchema = z.object({
   visualWorld: z.string().min(3).max(48),
   primaryMotifs: z.array(z.string().min(2).max(72)).min(4).max(14),
@@ -70,7 +95,7 @@ export const ScenePlanSchema = z.object({
   sceneGoal: z.string().min(3).max(360).default('Explain the spoken line visually'),
   heroVisual: z.string().min(2).max(90).default('main subject'),
   supportVisuals: z.array(z.string().min(1).max(72)).min(1).max(6).default(['supporting detail']),
-  visualSignature: z.string().min(3).max(160).default('unique-scene'),
+  visualSignature: z.string().min(3).max(180).default('unique-scene'),
   conceptTags: z.array(z.string().min(1).max(36)).max(14).default([]),
   forbiddenTags: z.array(z.string().min(1).max(36)).max(14).default([]),
   alignmentScore: z.number().min(0).max(1).default(0),
@@ -85,7 +110,14 @@ export const ScenePlanSchema = z.object({
   mustShow: z.array(z.string().min(2).max(90)).min(2).max(7).default(['main subject','supporting detail']),
   avoid: z.array(z.string().min(2).max(90)).max(8).default([]),
   subjectTokens: z.array(z.string().min(2).max(36)).min(2).max(14).default(['main','subject']),
-  semanticAction: SemanticActionSchema.default('reveal')
+  semanticAction: SemanticActionSchema.default('reveal'),
+  sceneGrammar: SceneGrammarSchema.optional(),
+  cameraMove: CameraMoveSchema.optional(),
+  textMode: TextModeSchema.optional(),
+  compositionBias: CompositionBiasSchema.optional(),
+  layerCount: z.number().int().min(5).max(16).optional(),
+  matchCutToken: z.string().min(2).max(100).optional(),
+  artDirection: ArtDirectionSchema.optional()
 });
 
 export const FactoryPlanSchema = z.object({
@@ -111,6 +143,21 @@ export const FactoryPlanSchema = z.object({
     maxSilenceGap: z.number().max(0.35),
     repetitionThreshold: z.number().min(0).max(1),
     profile: z.string()
+  }).passthrough().optional(),
+  v4: z.object({
+    renderer: z.literal('scene-grammar-v4'),
+    version: z.literal(4),
+    grammarVersion: z.number().int().min(1),
+    artDirectionVersion: z.number().int().min(1),
+    visualWorld: z.string().min(3),
+    fixedBottomCaption: z.literal(false),
+    matchCutContinuity: z.boolean(),
+    minimumGrammarDiversity: z.number().int().min(4),
+    grammarCount: z.number().int().min(4),
+    cameraCount: z.number().int().min(3),
+    grammarSequence: z.array(SceneGrammarSchema),
+    cameraSequence: z.array(CameraMoveSchema),
+    artDirection: ArtDirectionSchema
   }).passthrough().optional()
 });
 
@@ -119,3 +166,6 @@ export type ScenePlan = z.infer<typeof ScenePlanSchema>;
 export type VisualKind = z.infer<typeof VisualKindSchema>;
 export type VisualBeat = z.infer<typeof VisualBeatSchema>;
 export type TopicProfile = z.infer<typeof TopicProfileSchema>;
+export type SceneGrammar = z.infer<typeof SceneGrammarSchema>;
+export type CameraMove = z.infer<typeof CameraMoveSchema>;
+export type ArtDirection = z.infer<typeof ArtDirectionSchema>;
