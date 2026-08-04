@@ -4,6 +4,7 @@ import {rankResearchItems} from './repair-wikipedia-research.mjs';
 
 const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 const normalize = (value) => clean(value).toLowerCase();
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const deriveDepthSubject = (topic, language = 'en') => {
   let value = clean(topic).replace(/[?!.,:;]+/g, ' ');
@@ -49,29 +50,42 @@ export const canonicalResearchSeeds = (subject, topic, category) => {
   return [...new Set(seeds.map(clean).filter(Boolean))].slice(0, 12);
 };
 
-const fetchJson = async (url) => {
-  const response = await fetch(url, {headers: {'user-agent': 'NeoSaniye-AutoFactory/8.0'}});
-  if (!response.ok) throw new Error(`Wikipedia HTTP ${response.status}`);
-  return response.json();
+const fetchJson = async (url, label = 'request') => {
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, {headers: {'user-agent': 'NeoSaniye-AutoFactory/8.0'}});
+    if (response.ok) return response.json();
+    lastStatus = response.status;
+    const retryable = response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === 2) break;
+    await sleep(700 * (2 ** attempt));
+  }
+  throw new Error(`Wikipedia HTTP ${lastStatus} during ${label}`);
 };
 
 const fetchDepthCandidates = async ({subject, topic, category, language}) => {
   const endpoint = language === 'tr' ? 'https://tr.wikipedia.org/w/api.php' : 'https://en.wikipedia.org/w/api.php';
   const seeds = canonicalResearchSeeds(subject, topic, category);
   const titles = [...seeds];
-  for (const query of seeds.slice(0, 7)) {
-    const searchUrl = `${endpoint}?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=1&format=json&origin=*&srlimit=6`;
-    const result = await fetchJson(searchUrl);
+  const searchQueries = [...new Set([subject, `${subject} ${category}`].map(clean).filter(Boolean))].slice(0, 2);
+  for (const query of searchQueries) {
+    const searchUrl = `${endpoint}?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=1&format=json&origin=*&srlimit=8`;
+    const result = await fetchJson(searchUrl, `search:${query}`);
     titles.push(...(result?.query?.search || []).map((item) => String(item.title || '')));
   }
-  const uniqueTitles = [...new Set(titles.map(clean).filter(Boolean))].slice(0, 32);
+  const uniqueTitles = [...new Set(titles.map(clean).filter(Boolean))].slice(0, 28);
   const extractUrl = `${endpoint}?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles=${encodeURIComponent(uniqueTitles.join('|'))}`;
-  const extracts = await fetchJson(extractUrl);
+  const extracts = await fetchJson(extractUrl, 'batch-extract');
   return Object.values(extracts?.query?.pages || {}).map((page) => ({
     title: String(page?.title || ''),
     url: `${language === 'tr' ? 'https://tr.wikipedia.org/wiki/' : 'https://en.wikipedia.org/wiki/'}${encodeURIComponent(String(page?.title || '').replace(/ /g, '_'))}`,
     excerpt: String(page?.extract || '').replace(/\s+/g, ' ').slice(0, 5200),
   })).filter((item) => item.title && item.excerpt);
+};
+
+const writeState = async (planPath, manifestPath, plan, manifest) => {
+  await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 };
 
 export const repairResearchDepth = async ({planPath, manifestPath}) => {
@@ -86,7 +100,40 @@ export const repairResearchDepth = async ({planPath, manifestPath}) => {
   const language = plan.language === 'tr' ? 'tr' : 'en';
   const subject = deriveDepthSubject(plan.topic, language);
   const context = {topic: plan.topic, subject, category: plan.category, language};
-  const fetched = await fetchDepthCandidates(context);
+  const scenes = Array.isArray(plan.scenes) ? plan.scenes : [];
+  const curatedReady = scenes.length >= 10 && scenes.every((scene) => scene.contentRepairSource === 'curated-topic-script');
+  if (curatedReady) {
+    const existing = plan.research || [];
+    const combinedLength = existing.reduce((sum, item) => sum + clean(item.excerpt).length, 0);
+    plan.researchDepth = {
+      version: 1,
+      mode: 'curated-story-network-bypass',
+      subject,
+      sourceCount: existing.length,
+      excerptCharacters: combinedLength,
+      selected: existing.map((item) => ({title: item.title, score: null})),
+      failClosed: true,
+    };
+    manifest.researchDepthSubject = subject;
+    manifest.researchDepthCharacters = combinedLength;
+    manifest.researchDepthBypassedForCuratedStory = true;
+    await writeState(planPath, manifestPath, plan, manifest);
+    console.log(`Research depth network bypass: trusted curated story already has ${scenes.length} scenes for "${subject}".`);
+    return {changed: false, plan, manifest};
+  }
+
+  const existingRanked = rankResearchItems(plan.research || [], context, 7);
+  const existingLength = existingRanked.reduce((sum, item) => sum + clean(item.excerpt).length, 0);
+  let fetched = [];
+  let networkError = null;
+  try {
+    fetched = await fetchDepthCandidates(context);
+  } catch (error) {
+    networkError = error;
+    if (existingRanked.length < 3 || existingLength < 4200) throw error;
+    console.warn(`Research depth network degraded safely: ${error.message}; using existing ranked sources.`);
+  }
+
   const merged = [...(plan.research || []), ...fetched];
   const ranked = rankResearchItems(merged, context, 7);
   const combinedLength = ranked.reduce((sum, item) => sum + clean(item.excerpt).length, 0);
@@ -99,11 +146,13 @@ export const repairResearchDepth = async ({planPath, manifestPath}) => {
   plan.research = ranked.map(({researchScore, ...item}) => item);
   plan.researchDepth = {
     version: 1,
+    mode: networkError ? 'existing-ranked-fallback' : 'batched-wikipedia-depth',
     subject,
     sourceCount: ranked.length,
     excerptCharacters: combinedLength,
     selected: ranked.map((item) => ({title: item.title, score: item.researchScore})),
     failClosed: true,
+    networkDegraded: Boolean(networkError),
   };
   manifest.researchCount = ranked.length;
   manifest.researchDepthSubject = subject;
@@ -112,8 +161,7 @@ export const repairResearchDepth = async ({planPath, manifestPath}) => {
     manifest.aiPlan = false;
     manifest.aiPlanInvalidatedByResearchDepth = true;
   }
-  await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  await writeState(planPath, manifestPath, plan, manifest);
   console.log(`Research depth repaired: subject="${subject}", sources=${ranked.map((item) => item.title).join(' | ')}, excerptChars=${combinedLength}`);
   return {changed, plan, manifest};
 };
