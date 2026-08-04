@@ -85,6 +85,30 @@ const hash = (value) => {
   return h >>> 0;
 };
 const countMatches = (text, regex) => (text.match(regex) || []).length;
+const shortLabel = (value, max = 38) => {
+  const text = clean(value).replace(/[.!?;:]+$/g, '');
+  if (text.length <= max) return text;
+  const words = text.split(/\s+/).filter(Boolean);
+  let output = '';
+  for (const word of words) {
+    const next = output ? `${output} ${word}` : word;
+    if (next.length > max) break;
+    output = next;
+  }
+  return output || text.slice(0, max).trim();
+};
+const uniqueLabels = (values) => {
+  const seen = new Set();
+  const output = [];
+  for (const value of values) {
+    const label = shortLabel(value);
+    const key = normalized(label);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(label);
+  }
+  return output;
+};
 
 const selectFamilies = (text) => {
   const scored = FAMILY_RULES.map(([family, regex]) => ({family, score: countMatches(text, regex)}))
@@ -100,28 +124,35 @@ const selectFamilies = (text) => {
 };
 
 const motifKind = (label, sceneText, mode) => {
-  const text = normalized(`${label} ${sceneText}`);
-  if (/map|border|route|country|continent|ocean|global|world/.test(text)) return 'map-route';
-  if (/dna|cell|bacteria|virus|microbe|fungus|organism|blood|brain|gene/.test(text)) return 'organism';
-  if (/planet|star|orbit|galaxy|black hole|gravity|light/.test(text)) return 'orbital';
-  if (/cable|fiber|layer|core|inside|cross.section|structure/.test(text) || mode === 'exploded') return 'cross-section';
-  if (/machine|engine|device|factory|mechanism|turbine|reactor|gear/.test(text)) return 'mechanism';
-  if (/document|archive|letter|treaty|evidence|record|report/.test(text) || mode === 'evidence') return 'document';
-  if (/person|emperor|king|queen|scientist|soldier|leader|people|human/.test(text)) return 'portrait';
-  if (/forest|ocean|river|mountain|environment|habitat|city|battlefield/.test(text)) return 'environment';
-  if (/percent|rate|number|growth|decline|data|price|population|money/.test(text)) return 'data';
-  if (/force|pressure|heat|energy|wave|radiation|magnetic|electric/.test(text)) return 'force-field';
+  const own = normalized(label);
+  const context = normalized(sceneText);
+  if (/map|border|route|country|continent|global|world|transmission/.test(own)) return 'map-route';
+  if (/dose|schedule|course|day|timeline|generation|before|after|sequence/.test(own)) return 'timeline';
+  if (/antibiotic|capsule|pill|tablet|drug|medicine|treatment/.test(own)) return 'hero-object';
+  if (/dna|cell|bacteria|bacterium|virus|microbe|fungus|organism|blood|brain|gene|plasmid|mutation|colony/.test(own)) return 'organism';
+  if (/planet|star|orbit|galaxy|black hole|gravity|light/.test(own)) return 'orbital';
+  if (/cable|fiber|layer|core|inside|cross.section|structure/.test(own) || mode === 'exploded') return 'cross-section';
+  if (/machine|engine|device|factory|mechanism|turbine|reactor|gear/.test(own)) return 'mechanism';
+  if (/document|archive|letter|treaty|evidence|record|report/.test(own) || mode === 'evidence') return 'document';
+  if (/person|people|human|emperor|king|queen|scientist|soldier|leader|host/.test(own)) return 'portrait';
+  if (/animal|food|water|forest|ocean|river|mountain|environment|habitat|city|battlefield/.test(own)) return 'environment';
+  if (/percent|rate|number|growth|decline|data|price|population|money/.test(own)) return 'data';
+  if (/force|pressure|heat|energy|wave|radiation|magnetic|electric/.test(own)) return 'force-field';
   if (mode === 'network') return 'network';
   if (mode === 'timeline') return 'timeline';
+  if (/bacteria|antibiotic|dna|gene|microbe/.test(context)) return 'organism';
+  if (/cable|fiber|network|internet/.test(context)) return 'cross-section';
+  if (/space|planet|star|galaxy|gravity/.test(context)) return 'orbital';
   return 'hero-object';
 };
 
-const sceneFamily = (base, scene, index) => {
+const sceneFamily = (base, scene) => {
   const text = normalized(`${scene.title} ${scene.voiceLine} ${(scene.visualContract?.labels || []).join(' ')}`);
   const local = selectFamilies(text);
+  const specialized = Boolean(clean(scene.semanticLockRule));
+  if (specialized) return base.primary;
   if (local.scores[0]?.score >= 2 && local.primary !== base.primary) return local.primary;
   if (['evidence', 'timeline'].includes(scene.visualContract?.mode) && base.primary !== 'archive-noir') return base.secondary;
-  if (index > 0 && index % 4 === 3) return base.secondary;
   return base.primary;
 };
 
@@ -132,6 +163,22 @@ const sceneMotion = (profile, scene, index) => {
   if (mode === 'comparison') return 'rack-focus';
   if (mode === 'timeline') return 'parallax';
   return profile.motion[index % profile.motion.length];
+};
+
+const labelsForScene = (scene, base) => {
+  const specialized = Boolean(clean(scene.semanticLockRule));
+  if (!specialized) return uniqueLabels(base.labels || []).slice(0, 5);
+  const concrete = [
+    scene.title,
+    ...(Array.isArray(scene.mustShow) ? scene.mustShow : []),
+    ...(Array.isArray(scene.props) ? scene.props : []),
+    ...(Array.isArray(scene.supportVisuals) ? scene.supportVisuals : []),
+    scene.primaryMotif,
+    scene.secondaryMotif,
+    ...(Array.isArray(base.labels) ? base.labels : []),
+  ].filter(Boolean);
+  const concise = concrete.filter((value) => clean(value).split(/\s+/).length <= 5);
+  return uniqueLabels([scene.title, ...concise, ...concrete]).slice(0, 5);
 };
 
 const topicText = normalized(`${plan.topic} ${plan.category} ${plan.title} ${plan.narration}`);
@@ -146,9 +193,9 @@ for (let index = 0; index < (plan.scenes || []).length; index += 1) {
   if (!base || base.version !== 6) {
     throw new Error(`V7 requires a valid V6 visual contract first; scene ${scene.id} is missing it.`);
   }
-  const family = sceneFamily(families, scene, index);
+  const family = sceneFamily(families, scene);
   const profile = FAMILY_PROFILES[family];
-  const labels = Array.isArray(base.labels) ? base.labels.slice(0, 5) : [];
+  const labels = labelsForScene(scene, base);
   const sceneText = `${scene.title} ${scene.voiceLine} ${labels.join(' ')}`;
   const motifs = labels.map((label, motifIndex) => ({
     label,
@@ -156,7 +203,7 @@ for (let index = 0; index < (plan.scenes || []).length; index += 1) {
     importance: motifIndex === 0 ? 'hero' : motifIndex < 3 ? 'support' : 'detail',
     depth: motifIndex % 3,
   }));
-  if (!motifs.length) throw new Error(`V7 scene ${scene.id} has no drawable motifs.`);
+  if (motifs.length < 2) throw new Error(`V7 scene ${scene.id} has fewer than two drawable motifs.`);
   usedFamilies.add(family);
   motifs.forEach((motif) => usedMotifs.add(motif.kind));
   const effectOffset = (videoSeed + scene.id + index) % profile.effects.length;
@@ -169,6 +216,8 @@ for (let index = 0; index < (plan.scenes || []).length; index += 1) {
     ...base,
     version: 7,
     baseVersion: 6,
+    labels,
+    subject: labels[0],
     motifs,
     style: {
       family,
@@ -197,7 +246,7 @@ for (let index = 0; index < (plan.scenes || []).length; index += 1) {
 plan.v7 = {
   renderer: 'adaptive-documentary-v7',
   version: 7,
-  directorVersion: 1,
+  directorVersion: 2,
   primaryFamily: families.primary,
   secondaryFamily: families.secondary,
   usedFamilies: [...usedFamilies],
