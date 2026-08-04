@@ -1,4 +1,4 @@
-name: Universal Topic Render Smoke
+name: Adaptive V7 Topic Render Smoke
 
 on:
   pull_request:
@@ -54,37 +54,37 @@ jobs:
           npm install --no-audit --no-fund
           python -m pip install --disable-pip-version-check edge-tts
 
-      - name: Build unrelated-topic plan
+      - name: Build unrelated-topic V7 plan
         run: |
           npm run auto:plan
           npx tsx scripts/auto-factory/normalize-scene-density.ts
-          npm run auto:v4
+          npm run auto:v7
           npm run auto:images
           npm run auto:audio
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Render universal V6 video
+      - name: Render adaptive V7 video
         run: npm run render:auto
 
-      - name: Build contact sheet
+      - name: Build V7 contact sheet
         run: |
           mkdir -p out/review
-          ffmpeg -y -i out/auto-factory-fullhd.mp4 -vf "fps=1/3.0,scale=270:-1,tile=3x5" -frames:v 1 out/review/universal-contact.jpg
+          ffmpeg -y -i out/auto-factory-fullhd.mp4 -vf "fps=1/3.0,scale=270:-1,tile=3x5" -frames:v 1 out/review/adaptive-v7-contact.jpg
 
-      - name: Quality control
+      - name: V7 quality control
         run: npm run auto:qc
 
-      - name: Upload universal smoke artifact
+      - name: Upload adaptive V7 smoke artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: universal-undersea-cables-smoke
+          name: adaptive-v7-undersea-cables-smoke
           if-no-files-found: warn
           retention-days: 3
           path: |
             out/auto-factory-fullhd.mp4
             out/production-report.json
-            out/review/universal-contact.jpg
+            out/review/adaptive-v7-contact.jpg
             public/auto-factory/plan.json
