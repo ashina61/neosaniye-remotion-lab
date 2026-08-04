@@ -17,6 +17,7 @@ const modeForKind = (scene, direction) => {
 
   if (domain === 'technology-systems') {
     if (kind === 'cross-section') return 'technical-cutaway';
+    if (kind === 'network' && /landing|shore|station|terrestrial|data center/.test(text)) return 'realistic-object';
     if (kind === 'network') return 'system-map';
     if (kind === 'mechanism' && /repeater|amplif|restore|signal station/.test(text)) return 'realistic-object';
     if (kind === 'mechanism') return 'technical-cutaway';
@@ -52,11 +53,11 @@ const modeForKind = (scene, direction) => {
 const compositionFor = (scene, mode, index) => {
   const text = lower(`${scene.title} ${scene.voiceLine}`);
   if (mode === 'realistic-object') {
-    if (/ship|lay|survey|route/.test(text)) return 'cable-ship-operation';
+    if (/repair|raise|splice|replace|fault/.test(text)) return 'repair-ship-operation';
     if (/landing|shore|station|terrestrial|data center/.test(text)) return 'shore-landing-station';
     if (/anchor|fishing|coast|armor|armour/.test(text)) return 'anchor-hazard';
-    if (/repair|raise|splice|replace|fault/.test(text)) return 'repair-ship-operation';
     if (/repeater|restore|amplif/.test(text)) return 'repeater-line';
+    if (/ship|lay|survey|planned route/.test(text)) return 'cable-ship-operation';
     return ['foreground-hero', 'wide-establishing', 'depth-corridor'][index % 3];
   }
   if (/cutaway/.test(mode)) {
@@ -158,7 +159,7 @@ if (changed) {
     const physical = modes.filter((mode) => mode === 'realistic-object').length;
     const maps = modes.filter((mode) => mode === 'system-map').length;
     const cutaways = modes.filter((mode) => mode === 'technical-cutaway').length;
-    if (physical < 5 || maps > 2 || cutaways < 2) {
+    if (physical < 6 || maps > 1 || cutaways < 3) {
       throw new Error(`Undersea cable V8 direction must prioritize physical scenes: physical=${physical}, maps=${maps}, cutaways=${cutaways}.`);
     }
   }
