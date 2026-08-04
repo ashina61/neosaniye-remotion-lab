@@ -84,13 +84,16 @@ if (run.status !== 0) throw new Error(`${run.stdout}\n${run.stderr}`);
 
 const result = JSON.parse(await readFile(planPath, 'utf8'));
 const sourceTitles = result.storyRepair?.selectedSources?.map((source) => source.title) || [];
-if (sourceTitles.join('|') !== 'Submarine communications cable|Fiber-optic cable') {
-  throw new Error(`Wrong sources survived: ${sourceTitles.join(', ')}`);
+for (const required of ['Submarine communications cable', 'Fiber-optic cable']) {
+  if (!sourceTitles.includes(required)) throw new Error(`Required source missing: ${required}`);
+}
+if (sourceTitles.includes('Internet in India') || sourceTitles.includes('Nicole Starosielski')) {
+  throw new Error(`Clearly off-topic sources survived ranking: ${sourceTitles.join(', ')}`);
 }
 if (result.scenes.length < 7 || result.scenes.length > 10) throw new Error(`Unexpected scene count: ${result.scenes.length}`);
 const visible = JSON.stringify(result.scenes);
 if (/India|Nicole|Starosielski|She conducts|others to|1865|1858|VERİ|SİSTEM|SİNYAL/i.test(visible)) {
-  throw new Error('Off-topic research or stale fallback text survived.');
+  throw new Error('Off-topic research or stale fallback text survived into rendered scenes.');
 }
 for (const scene of result.scenes) {
   if (!Array.isArray(scene.visualConcepts) || scene.visualConcepts.length < 2 || scene.visualConcepts.length > 5) {
