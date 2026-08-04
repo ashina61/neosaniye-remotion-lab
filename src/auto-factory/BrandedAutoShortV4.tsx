@@ -4,7 +4,7 @@ import planJson from '../../public/auto-factory/plan.json';
 import {AutoShortV4} from './AutoShortV4';
 import {BrandWatermark} from './BrandWatermark';
 import {SemanticAutoShortV5} from './SemanticAutoShortV5';
-import {UniversalSemanticAutoShortV6} from './UniversalSemanticAutoShortV6';
+import {UniversalSemanticAutoShortV6Safe} from './UniversalSemanticAutoShortV6Safe';
 
 const scenes = ((planJson as unknown as {
   scenes?: Array<{semanticLockRule?: unknown; visualContract?: {version?: unknown}}>;
@@ -21,7 +21,7 @@ export const BrandedAutoShortV4: React.FC = () => (
     {useSpecializedRenderer ? (
       <SemanticAutoShortV5 />
     ) : useUniversalRenderer ? (
-      <UniversalSemanticAutoShortV6 />
+      <UniversalSemanticAutoShortV6Safe />
     ) : (
       <AutoShortV4 />
     )}
