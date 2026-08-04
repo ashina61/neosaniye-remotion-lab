@@ -96,7 +96,7 @@ const Texture: React.FC<{scene: V8Scene; progress: number}> = ({scene, progress}
       const n = hash(`${scene.id}-${index}`);
       return <span key={index} style={{position: 'absolute', left: `${n % 100}%`, top: `${(n * 19) % 100}%`, width: index % 5 === 0 ? 5 : 3, height: index % 5 === 0 ? 5 : 3, borderRadius: 99, background: index % 3 ? palette.ink : palette.highlight, opacity: 0.06 + (index % 4) * 0.04, transform: `translate(${((index % 5) - 2) * progress * 11}px, ${-progress * (6 + index % 8)}px)`}} />;
     })}
-    {motion.fxBudget.grain ? <AbsoluteFill style={{opacity: 0.28, backgroundImage: `radial-gradient(circle, ${alpha(palette.ink, 0.15)} 0 1px, transparent 1.5px), repeating-linear-gradient(108deg, transparent 0 9px, ${alpha(palette.ink, 0.035)} 10px 11px)`, backgroundSize: '12px 12px, auto: 'none'}} /> : null}
+    {motion.fxBudget.grain ? <AbsoluteFill style={{opacity: 0.28, backgroundImage: `radial-gradient(circle, ${alpha(palette.ink, 0.15)} 0 1px, transparent 1.5px), repeating-linear-gradient(108deg, transparent 0 9px, ${alpha(palette.ink, 0.035)} 10px 11px)`, backgroundSize: '12px 12px'}} /> : null}
     {motion.fxBudget.vignette ? <AbsoluteFill style={{boxShadow: 'inset 0 0 180px rgba(0,0,0,.68)'}} /> : null}
   </AbsoluteFill>;
 };
