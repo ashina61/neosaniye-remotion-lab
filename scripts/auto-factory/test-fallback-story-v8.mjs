@@ -18,10 +18,15 @@ const facts = [
   'Repair crews locate faults and raise damaged cable sections from the ocean floor.',
   'Global internet traffic depends on many physical cables rather than invisible satellites.',
 ];
+const researchText = `${facts.join(' ')} ${'Submarine cable engineering uses optical repeaters, armored shore sections, landing stations, repair ships and redundant global routes. '.repeat(35)}`;
 const plan = {
   topic: 'How undersea cables carry the internet', category: 'technology', language: 'en',
-  research: [{title: 'Submarine communications cable', excerpt: 'x'.repeat(2300)}, {title: 'Optical fiber', excerpt: 'x'.repeat(2100)}, {title: 'Fiber-optic cable', excerpt: 'x'.repeat(1800)}],
-  researchDepth: {version: 1, sourceCount: 3, excerptCharacters: 6200, failClosed: true},
+  research: [
+    {title: 'Submarine communications cable', excerpt: researchText},
+    {title: 'Optical fiber', excerpt: `${facts[1]} ${facts[2]} ${facts[3]} ${'Optical fiber carries light through a protected glass core. '.repeat(25)}`},
+    {title: 'Fiber-optic cable', excerpt: `${facts[5]} ${facts[6]} ${facts[7]} ${'Fiber cable layers protect communications infrastructure. '.repeat(25)}`},
+  ],
+  researchDepth: {version: 1, sourceCount: 3, excerptCharacters: 9200, failClosed: true},
   scenes: facts.map((voiceLine, index) => ({id: index + 1, voiceLine, contentRepairSource: 'ranked-complete-research'})),
 };
 await writeFile(planPath, JSON.stringify(plan), 'utf8');
@@ -32,7 +37,8 @@ const run = spawnSync(process.execPath, ['scripts/auto-factory/repair-fallback-s
 if (run.status !== 0) throw new Error(`${run.stdout}\n${run.stderr}`);
 const result = JSON.parse(await readFile(planPath, 'utf8'));
 if (result.scenes.length !== 10) throw new Error(`Trusted V3 story was resized: ${result.scenes.length}`);
-if (result.scenes.some((scene, index) => scene.voiceLine !== facts[index])) throw new Error('Trusted V3 facts were overwritten.');
-if (result.storyRepair?.mode !== 'preserve-grounded-v3-story') throw new Error(`Unexpected V8 fallback mode: ${result.storyRepair?.mode}`);
+if (result.scenes.some((scene, index) => scene.voiceLine !== facts[index])) throw new Error('Research-supported V3 facts were overwritten.');
+if (result.storyRepair?.mode !== 'preserve-research-supported-story') throw new Error(`Unexpected V8 fallback mode: ${result.storyRepair?.mode}`);
+if (!result.storyRepair?.researchSupport?.every((row) => row.passed)) throw new Error('Research support rows were not recorded or did not pass.');
 await rm(dir, {recursive: true, force: true});
-console.log('Fallback story V8 regression passed: trusted ten-scene grounded plans are preserved.');
+console.log('Fallback story V8 regression passed: only research-supported ten-scene plans are preserved.');
