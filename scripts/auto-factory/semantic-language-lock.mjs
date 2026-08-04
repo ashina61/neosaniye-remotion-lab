@@ -109,7 +109,7 @@ const rules = [
     visualKind: 'microbe-field', sceneGrammar: 'macro-field', shotType: 'macro', layout: 'macro',
     semanticAction: 'multiply', cameraMove: 'push-in', textMode: 'integrated', compositionBias: 'center', layerCount: 12,
   }),
-  rule('resistant-survival', /\b(few resistant|resistant bacteria survive|resistant cells survive|survive (?:the )?treatment)\b/i, {
+  rule('resistant-survival', /\b(few resistant|resistant bacteria survive|resistant cells survive)\b/i, {
     title: 'RESISTANT SURVIVORS', kicker: 'A FEW CELLS REMAIN AFTER TREATMENT',
     heroVisual: 'resistant bacteria surviving antibiotic treatment',
     secondaryMotif: 'susceptible bacteria removed around the survivors',
@@ -202,6 +202,19 @@ if (mode === 'repair' && language === 'en' && isAntibioticProfile) {
       textMode: currentRule.textMode,
       compositionBias: currentRule.compositionBias,
       layerCount: currentRule.layerCount,
+      beats: [
+        {at: 0.14, label: compact(currentRule.heroVisual, 7, 100), action: 'reveal'},
+        {
+          at: 0.46,
+          label: compact(supportVisuals[0], 7, 100),
+          action: currentRule.semanticAction === 'transfer' ? 'transfer'
+            : currentRule.semanticAction === 'multiply' ? 'multiply'
+              : currentRule.semanticAction === 'filter' ? 'eliminate'
+                : currentRule.semanticAction === 'compare' ? 'swap'
+                  : 'connect',
+        },
+        {at: 0.72, label: compact(supportVisuals[1] || currentRule.secondaryMotif, 7, 100), action: 'highlight'},
+      ],
       alignmentScore: 1,
       visualSignature: `semantic-lock:${currentRule.id}:${index + 1}`,
       imagePrompt: `Vertical 9:16 editorial documentary collage. Show ${currentRule.heroVisual}. Include ${supportVisuals.join(', ')}. Every object must directly explain the narration. No unrelated geometry, no readable text, no logo.`,
