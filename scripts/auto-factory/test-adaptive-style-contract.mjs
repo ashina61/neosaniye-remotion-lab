@@ -8,7 +8,7 @@ const fixtures = [
   {topic: 'How antibiotic resistance develops', category: 'health', expected: 'biological-macro', words: ['bacteria', 'antibiotic', 'dna', 'cell']},
   {topic: 'How undersea cables carry the internet', category: 'technology', expected: 'technical-blueprint', words: ['undersea cable', 'fiber optic', 'network', 'signal']},
   {topic: 'Why the Roman Empire split', category: 'history', expected: 'archive-noir', words: ['Roman Empire', 'history', 'emperor', 'border']},
-  {topic: 'Why leafcutter ants farm fungus', category: 'nature', expected: 'naturalist-field', words: ['leafcutter ants', 'fungus', 'forest', 'colony']},
+  {topic: 'How wolves reshape forest ecosystems', category: 'nature', expected: 'naturalist-field', words: ['wolves', 'forest', 'ecosystem', 'wildlife']},
 ];
 
 const makePlan = (fixture) => ({
