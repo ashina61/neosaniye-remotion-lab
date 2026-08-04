@@ -26,6 +26,20 @@ def tokens(value: object) -> set[str]:
     return {part for part in norm(value).split() if len(part) > 2}
 
 
+def contract_grounding_text(scene: dict) -> str:
+    contract = scene.get("visualContract") or {}
+    labels = contract.get("labels") or []
+    motifs = contract.get("motifs") or []
+    motif_labels = [str(motif.get("label", "")) for motif in motifs if isinstance(motif, dict)]
+    return " ".join([
+        str(scene.get("primaryMotif", "")),
+        str(scene.get("secondaryMotif", "")),
+        " ".join(map(str, scene.get("mustShow", []))),
+        " ".join(map(str, labels)),
+        " ".join(motif_labels),
+    ])
+
+
 motifs = [str(scene.get("primaryMotif", "")).strip() for scene in scenes]
 worlds = [str(scene.get("visualWorld", "")).strip() for scene in scenes]
 visual_kinds = [str(scene.get("visualKind", "")).strip() for scene in scenes]
@@ -43,14 +57,7 @@ for value in voice_pitches:
 
 forbidden = [str(value) for value in profile.get("forbiddenMotifs", [])]
 forbidden_tokens = set().union(*(tokens(value) for value in forbidden)) if forbidden else set()
-scene_subject_text = [
-    " ".join([
-        str(scene.get("primaryMotif", "")),
-        str(scene.get("secondaryMotif", "")),
-        " ".join(map(str, scene.get("mustShow", []))),
-    ])
-    for scene in scenes
-]
+scene_subject_text = [contract_grounding_text(scene) for scene in scenes]
 image_prompt_grounding_overlaps = [
     len(tokens(scene.get("imagePrompt", "")) & tokens(subject_text))
     for scene, subject_text in zip(scenes, scene_subject_text)
@@ -101,6 +108,7 @@ report["topic_consecutive_motif_repeats"] = consecutive_motifs
 report["topic_forbidden_motif_leaks"] = forbidden_leaks
 report["minimum_image_prompt_grounding_overlap"] = min(image_prompt_grounding_overlaps, default=0)
 report["image_prompt_grounding_overlaps"] = image_prompt_grounding_overlaps
+report["image_prompt_grounding_source"] = "v7-contract-motifs" if plan.get("v7", {}).get("version") == 7 else "scene-topic-motifs"
 report["narration_word_count"] = narration_word_count
 report["narration_word_range"] = [minimum_words, maximum_words]
 report["scene_voice_rates"] = voice_rates
@@ -118,6 +126,7 @@ summary = {
     "visual_kind_count": len(set(visual_kinds)),
     "minimum_image_prompt_grounding_overlap": min(image_prompt_grounding_overlaps, default=0),
     "image_prompt_grounding_overlaps": image_prompt_grounding_overlaps,
+    "image_prompt_grounding_source": report["image_prompt_grounding_source"],
     "narration_word_count": narration_word_count,
     "narration_word_range": [minimum_words, maximum_words],
     "natural_audio_tempo": audio_speed,

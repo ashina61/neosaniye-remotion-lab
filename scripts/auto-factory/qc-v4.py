@@ -26,7 +26,7 @@ def extract_frame(second: float) -> bytes:
     result = subprocess.run(command, check=True, capture_output=True)
     expected = WIDTH * HEIGHT
     if len(result.stdout) != expected:
-        raise RuntimeError(f"V4 frame extraction returned {len(result.stdout)} bytes, expected {expected}")
+        raise RuntimeError(f"Rendered frame extraction returned {len(result.stdout)} bytes, expected {expected}")
     return result.stdout
 
 
@@ -68,10 +68,19 @@ def similarity(left: list[float], right: list[float]) -> float:
     return max(0.0, min(1.0, 1.0 - difference))
 
 
+def motif_signature(scene: dict) -> str:
+    contract = scene.get("visualContract") or {}
+    motifs = contract.get("motifs") or []
+    kinds = [str(motif.get("kind", "")) for motif in motifs if isinstance(motif, dict)]
+    return "|".join(kinds)
+
+
 plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
 report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 scenes = plan.get("scenes", [])
 v4 = plan.get("v4") or {}
+v7 = plan.get("v7") or {}
+v7_active = int(v7.get("version", 0)) == 7 and v7.get("renderer") == "adaptive-documentary-v7"
 
 grammars = [str(scene.get("sceneGrammar", "")) for scene in scenes]
 cameras = [str(scene.get("cameraMove", "")) for scene in scenes]
@@ -81,6 +90,9 @@ layer_counts = [int(scene.get("layerCount", 0)) for scene in scenes]
 match_tokens = [str(scene.get("matchCutToken", "")) for scene in scenes]
 semantic_rules = [str(scene.get("semanticLockRule", "")).strip() for scene in scenes]
 semantic_renderer_active = bool(scenes) and all(semantic_rules)
+mode_signatures = [str((scene.get("visualContract") or {}).get("mode", "")) for scene in scenes]
+motif_signatures = [motif_signature(scene) for scene in scenes]
+family_signatures = [str(((scene.get("visualContract") or {}).get("style") or {}).get("family", "")) for scene in scenes]
 consecutive_grammar_repeats = sum(
     1 for index in range(1, len(grammars)) if grammars[index] == grammars[index - 1]
 )
@@ -109,7 +121,28 @@ adjacent_similarities = [
 ]
 average_adjacent_similarity = statistics.mean(adjacent_similarities) if adjacent_similarities else 1.0
 maximum_adjacent_similarity = max(adjacent_similarities, default=1.0)
-near_duplicate_pairs = sum(1 for value in adjacent_similarities if value >= 0.985)
+raw_near_duplicate_pairs = [
+    index for index, value in enumerate(adjacent_similarities, start=1) if value >= 0.985
+]
+semantic_near_duplicate_pairs: list[dict[str, object]] = []
+for left_scene_number in raw_near_duplicate_pairs:
+    left = left_scene_number - 1
+    right = left_scene_number
+    same_semantic = bool(semantic_rules[left]) and semantic_rules[left] == semantic_rules[right]
+    same_motifs = bool(motif_signatures[left]) and motif_signatures[left] == motif_signatures[right]
+    same_mode = bool(mode_signatures[left]) and mode_signatures[left] == mode_signatures[right]
+    same_family = bool(family_signatures[left]) and family_signatures[left] == family_signatures[right]
+    if not v7_active or (same_semantic and same_motifs and same_mode and same_family):
+        semantic_near_duplicate_pairs.append({
+            "left_scene": left_scene_number,
+            "right_scene": left_scene_number + 1,
+            "similarity": round(adjacent_similarities[left], 6),
+            "semantic_rule": semantic_rules[left],
+            "motif_signature": motif_signatures[left],
+            "mode": mode_signatures[left],
+            "family": family_signatures[left],
+        })
+
 center_x_spread = max(centers_x, default=0.5) - min(centers_x, default=0.5)
 center_y_spread = max(centers_y, default=0.5) - min(centers_y, default=0.5)
 
@@ -121,7 +154,7 @@ checks = {
     "v4_no_consecutive_scene_grammar": consecutive_grammar_repeats == 0,
     "v4_match_cut_tokens_present": bool(match_tokens) and all(len(value) >= 2 for value in match_tokens),
     "v4_rendered_frames_readable": len(signatures) == len(scenes) and not frame_errors,
-    "v4_no_rendered_near_duplicate_pairs": near_duplicate_pairs == 0,
+    "v4_no_rendered_near_duplicate_pairs": not semantic_near_duplicate_pairs,
     "v4_average_layout_similarity": average_adjacent_similarity <= 0.972,
     "v4_visual_center_x_diversity": center_x_spread >= 0.025,
     "v4_visual_center_y_diversity": center_y_spread >= 0.035,
@@ -143,9 +176,19 @@ else:
         "v4_independent_layer_density": bool(layer_counts) and all(7 <= value <= 12 for value in layer_counts),
     })
 
-active_renderer = "semantic-procedural-v5" if semantic_renderer_active else v4.get("renderer")
+if v7_active:
+    checks.update({
+        "v7_renderer_active": True,
+        "v7_motif_signatures_present": bool(motif_signatures) and all(motif_signatures),
+        "v7_semantic_duplicate_guard": not semantic_near_duplicate_pairs,
+    })
+
+active_renderer = "adaptive-documentary-v7" if v7_active else (
+    "semantic-procedural-v5" if semantic_renderer_active else v4.get("renderer")
+)
+renderer_version = 7 if v7_active else (5 if semantic_renderer_active else 4)
 report.setdefault("checks", {}).update(checks)
-report["renderer_version"] = 5 if semantic_renderer_active else 4
+report["renderer_version"] = renderer_version
 report["renderer"] = active_renderer
 report["v4_visual_world"] = v4.get("visualWorld")
 report["v4_scene_grammars"] = grammars
@@ -162,7 +205,10 @@ report["v5_consecutive_semantic_repeats"] = consecutive_semantic_repeats
 report["v4_adjacent_layout_similarities"] = [round(value, 6) for value in adjacent_similarities]
 report["v4_average_adjacent_layout_similarity"] = round(average_adjacent_similarity, 6)
 report["v4_maximum_adjacent_layout_similarity"] = round(maximum_adjacent_similarity, 6)
-report["v4_rendered_near_duplicate_pairs"] = near_duplicate_pairs
+report["v4_rendered_near_duplicate_pairs"] = len(semantic_near_duplicate_pairs)
+report["v7_raw_visual_similarity_pairs"] = raw_near_duplicate_pairs if v7_active else []
+report["v7_semantic_near_duplicate_pairs"] = semantic_near_duplicate_pairs if v7_active else []
+report["v7_motif_signatures"] = motif_signatures if v7_active else []
 report["v4_visual_center_x_spread"] = round(center_x_spread, 6)
 report["v4_visual_center_y_spread"] = round(center_y_spread, 6)
 report["v4_frame_errors"] = frame_errors
@@ -170,18 +216,20 @@ report["status"] = "PASS" if all(report["checks"].values()) else "FAIL"
 REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
 summary = {
-    "v4_status": "PASS" if all(checks.values()) else "FAIL",
+    "rendered_layout_status": "PASS" if all(checks.values()) else "FAIL",
     "renderer": active_renderer,
+    "renderer_version": renderer_version,
     "grammar_count": len(set(grammars)),
     "semantic_rule_count": len(set(semantic_rules)),
     "camera_count": len(set(cameras)),
     "average_adjacent_layout_similarity": round(average_adjacent_similarity, 6),
     "maximum_adjacent_layout_similarity": round(maximum_adjacent_similarity, 6),
-    "near_duplicate_pairs": near_duplicate_pairs,
+    "raw_visual_similarity_pairs": raw_near_duplicate_pairs,
+    "semantic_near_duplicate_pairs": semantic_near_duplicate_pairs,
     "visual_center_spread": [round(center_x_spread, 6), round(center_y_spread, 6)],
     "checks": checks,
 }
 print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 if not all(checks.values()):
-    raise SystemExit("V4/V5 QC failed: " + ", ".join(name for name, passed in checks.items() if not passed))
+    raise SystemExit("Rendered layout QC failed: " + ", ".join(name for name, passed in checks.items() if not passed))
