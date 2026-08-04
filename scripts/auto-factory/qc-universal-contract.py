@@ -56,6 +56,7 @@ for index, (scene, contract) in enumerate(zip(scenes, contracts), start=1):
             *map(str, scene.get("props", [])),
             *map(str, scene.get("mustShow", [])),
             *labels,
+            *[str(motif.get("label", "")) for motif in contract.get("motifs", []) if isinstance(motif, dict)],
             *[str(beat.get("label", "")) for beat in scene.get("beats", [])],
         ]
     )
@@ -63,7 +64,7 @@ for index, (scene, contract) in enumerate(zip(scenes, contracts), start=1):
         placeholder_scenes.append(index)
     if language == "en" and (re.search(r"[çğıöşüİ]", visible) or turkish_leak_pattern.search(visible)):
         language_leak_scenes.append(index)
-    source = tokens(f"{scene.get('title', '')} {scene.get('voiceLine', '')} {plan.get('topic', '')}")
+    source = tokens(f"{scene.get('title', '')} {scene.get('voiceLine', '')} {plan.get('topic', '')} {' '.join(map(str, scene.get('mustShow', [])))}")
     label_tokens = set().union(*(tokens(label) for label in labels)) if labels else set()
     grounding_overlaps.append(len(source & label_tokens))
 
@@ -80,23 +81,40 @@ for mode in modes:
         previous_mode = mode
     longest_mode_run = max(longest_mode_run, current_run)
 
+v7_enabled = plan.get("v7", {}).get("version") == 7
+contract_versions_valid = bool(scenes) and all(
+    (int(contract.get("version", 0)) == 7 and int(contract.get("baseVersion", 0)) == 6)
+    if v7_enabled else int(contract.get("version", 0)) == 6
+    for contract in contracts
+)
+
 checks = {
-    "v6_metadata_present": plan.get("v6", {}).get("renderer") == "universal-semantic-v6",
-    "v6_contract_present_every_scene": bool(scenes) and all(int(contract.get("version", 0)) == 6 for contract in contracts),
-    "v6_valid_visual_modes": bool(modes) and all(mode in valid_modes for mode in modes),
-    "v6_grounded_label_density": bool(label_counts) and all(2 <= count <= 5 for count in label_counts),
-    "v6_subject_is_rendered_label": not subject_mismatch_scenes,
-    "v6_no_placeholder_visuals": not placeholder_scenes,
-    "v6_no_wrong_language_visible_text": not language_leak_scenes,
-    "v6_scene_label_grounding": bool(grounding_overlaps) and min(grounding_overlaps) >= 2,
-    "v6_mode_diversity": len(set(modes)) >= min(3, len(scenes)),
-    "v6_no_excessive_mode_run": longest_mode_run <= 3,
-    "v6_fail_closed_enabled": plan.get("v6", {}).get("failClosed") is True,
+    "universal_base_metadata_present": plan.get("v6", {}).get("renderer") == "universal-semantic-v6",
+    "universal_contract_present_every_scene": contract_versions_valid,
+    "universal_valid_visual_modes": bool(modes) and all(mode in valid_modes for mode in modes),
+    "universal_grounded_label_density": bool(label_counts) and all(2 <= count <= 5 for count in label_counts),
+    "universal_subject_is_rendered_label": not subject_mismatch_scenes,
+    "universal_no_placeholder_visuals": not placeholder_scenes,
+    "universal_no_wrong_language_visible_text": not language_leak_scenes,
+    "universal_scene_label_grounding": bool(grounding_overlaps) and min(grounding_overlaps) >= 2,
+    "universal_mode_diversity": len(set(modes)) >= min(3, len(scenes)),
+    "universal_no_excessive_mode_run": longest_mode_run <= 3,
+    "universal_fail_closed_enabled": plan.get("v6", {}).get("failClosed") is True and (
+        not v7_enabled or plan.get("v7", {}).get("failClosed") is True
+    ),
 }
 
 report.setdefault("checks", {}).update(checks)
-report["renderer"] = "specialized-semantic-v5" if plan.get("v6", {}).get("specializedRendererAvailable") else "universal-semantic-v6"
-report["renderer_version"] = 5 if plan.get("v6", {}).get("specializedRendererAvailable") else 6
+if v7_enabled:
+    report["renderer"] = "adaptive-documentary-v7"
+    report["renderer_version"] = 7
+elif plan.get("v6", {}).get("specializedRendererAvailable"):
+    report["renderer"] = "specialized-semantic-v5"
+    report["renderer_version"] = 5
+else:
+    report["renderer"] = "universal-semantic-v6"
+    report["renderer_version"] = 6
+report["universal_contract_version"] = 7 if v7_enabled else 6
 report["v6_modes"] = modes
 report["v6_unique_modes"] = len(set(modes))
 report["v6_longest_mode_run"] = longest_mode_run
@@ -109,7 +127,10 @@ report["status"] = "PASS" if all(report["checks"].values()) else "FAIL"
 REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
 summary = {
-    "v6_status": "PASS" if all(checks.values()) else "FAIL",
+    "universal_contract_status": "PASS" if all(checks.values()) else "FAIL",
+    "renderer": report["renderer"],
+    "renderer_version": report["renderer_version"],
+    "contract_version": report["universal_contract_version"],
     "unique_modes": len(set(modes)),
     "longest_mode_run": longest_mode_run,
     "minimum_grounding_overlap": min(grounding_overlaps, default=0),
@@ -120,4 +141,4 @@ summary = {
 print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 if not all(checks.values()):
-    raise SystemExit("Universal V6 QC failed: " + ", ".join(name for name, passed in checks.items() if not passed))
+    raise SystemExit("Universal contract QC failed: " + ", ".join(name for name, passed in checks.items() if not passed))
