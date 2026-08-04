@@ -111,7 +111,7 @@ export const ScenePlanSchema = z.object({
   avoid: z.array(z.string().min(2).max(90)).max(8).default([]),
   subjectTokens: z.array(z.string().min(2).max(36)).min(2).max(14).default(['main','subject']),
   semanticAction: SemanticActionSchema.default('reveal'),
-  sceneGrammar: SceneGrammarSchema.optional(),
+  sceneGrammar: SceneGrammarSchema.default('hero-poster'),
   cameraMove: CameraMoveSchema.optional(),
   textMode: TextModeSchema.optional(),
   compositionBias: CompositionBiasSchema.optional(),
