@@ -33,7 +33,7 @@ const isGeneric = (value) => {
   return !n || GENERIC.has(n) || contentTokens(n).length === 0;
 };
 const hasWrongLanguage = (value) => language === 'en' && (/[çğıöşüİ]/u.test(String(value || '')) || TURKISH_LEAK_WORDS.test(String(value || '')));
-const truncate = (value, max = 42) => {
+const truncate = (value, max = 36) => {
   const text = clean(value).replace(/[.!?;:]+$/g, '');
   if (text.length <= max) return text;
   const words = text.split(/\s+/).filter(Boolean);
@@ -69,7 +69,7 @@ const phraseCandidates = (value) => {
   for (const clause of clauses) {
     const words = clause.split(/\s+/).filter(Boolean);
     const meaningful = words.filter((word) => contentTokens(word).length > 0);
-    if (meaningful.length >= 2) candidates.push(meaningful.slice(0, 5).join(' '));
+    if (meaningful.length >= 2) candidates.push(meaningful.slice(0, 4).join(' '));
     if (meaningful.length === 1) candidates.push(meaningful[0]);
   }
   const raw = text.split(/\s+/).filter(Boolean);
@@ -94,9 +94,13 @@ const modeFor = (scene) => {
 };
 
 const buildLabels = (scene) => {
+  const explicitConcepts = unique(Array.isArray(scene.visualConcepts) ? scene.visualConcepts : []);
+  if (explicitConcepts.length >= 2) return explicitConcepts.slice(0, 4);
+
   const groundedText = [scene.title, scene.voiceLine, plan.topic].filter(Boolean).join(' ');
   const grounded = new Set(contentTokens(groundedText));
   const supplied = [
+    ...explicitConcepts,
     scene.title,
     scene.heroVisual,
     scene.primaryMotif,
@@ -114,8 +118,7 @@ const buildLabels = (scene) => {
     ...phraseCandidates(scene.voiceLine),
     ...phraseCandidates(plan.topic),
   ];
-  const labels = unique([...suppliedGrounded, ...derived]);
-  return labels.slice(0, 5);
+  return unique([...suppliedGrounded, ...derived]).slice(0, 4);
 };
 
 const visibleFields = (scene) => [
@@ -153,9 +156,9 @@ for (let index = 0; index < (plan.scenes || []).length; index += 1) {
     scene.heroVisual = labels[0];
     scene.primaryMotif = labels[0];
     scene.secondaryMotif = labels[1];
-    scene.props = labels.slice(0, 5);
-    scene.supportVisuals = labels.slice(1, 5);
-    scene.mustShow = labels.slice(0, 5);
+    scene.props = labels;
+    scene.supportVisuals = labels.slice(1);
+    scene.mustShow = labels;
     scene.subjectTokens = [...sourceTokens].slice(0, 14);
     scene.visualSignature = `universal-v6:${mode}:${scene.id}:${labels.map(norm).join('|')}`.slice(0, 180);
     scene.beats = labels.slice(0, 3).map((label, beatIndex) => ({
@@ -182,7 +185,7 @@ const modes = (plan.scenes || []).map((scene) => scene.visualContract.mode);
 plan.v6 = {
   renderer: 'universal-semantic-v6',
   version: 6,
-  contractVersion: 1,
+  contractVersion: 2,
   specializedRendererAvailable: specialized,
   modeCount: new Set(modes).size,
   modes,
