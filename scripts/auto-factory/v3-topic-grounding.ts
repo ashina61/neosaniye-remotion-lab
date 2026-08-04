@@ -49,10 +49,17 @@ const compact = (value: unknown, max: number) => {
 };
 
 const STOP = new Set(language === 'tr'
-  ? ['ve','ile','icin','gibi','ama','fakat','olan','olarak','bir','bu','su','o','daha','sonra','kadar','cok','her','bile','ise','de','da','ki','mi','mu','mı','mü']
-  : ['the','and','for','with','that','this','from','into','then','than','when','while','where','what','how','why','are','was','were','has','have','had','can','could','would','will','its','their','our','your','more','most','some','only','also']);
+  ? ['ve','ile','icin','gibi','ama','fakat','olan','olarak','bir','bu','su','o','daha','sonra','kadar','cok','her','bile','ise','de','da','ki','mi','mu','mı','mü','nasıl','neden','nedir']
+  : ['the','and','for','with','that','this','from','into','then','than','when','while','where','what','how','why','are','was','were','has','have','had','can','could','would','will','its','their','our','your','more','most','some','only','also','does','did']);
+const PLACEHOLDERS = new Set([
+  'main subject','supporting detail','key mechanism','source object','context layer','unique scene',
+  'ana konu','destekleyici detay','ana nesne',
+]);
 const contentTokens = (value: unknown) => unique(words(value).filter((token) => token.length > 2 && !STOP.has(token)));
-const haystack = normalize(`${plan.topic} ${plan.title} ${plan.hook} ${plan.category} ${(plan.scenes || []).map((scene: Scene) => scene.voiceLine).join(' ')}`);
+const isPlaceholder = (value: unknown) => PLACEHOLDERS.has(normalize(value));
+const scenes = Array.isArray(plan.scenes) ? plan.scenes as Scene[] : [];
+if (!scenes.length) throw new Error('Topic grounding received no scenes');
+const haystack = normalize(`${plan.topic} ${plan.title} ${plan.hook} ${plan.category} ${scenes.map((scene) => scene.voiceLine).join(' ')}`);
 const hasAny = (...needles: string[]) => needles.some((needle) => haystack.includes(normalize(needle)));
 
 const profiles: Record<string, Profile> = {
@@ -71,6 +78,22 @@ const profiles: Record<string, Profile> = {
     forbiddenMotifs: ['generic laptop','stock market chart','ancient caravan','space rocket','random office dashboard'],
     paletteMood: 'sterile-blue-teal-warning-red',
     preferredVisualKinds: ['microbe-field','selection-process','object-exploded','gene-transfer','cause-effect','before-after','process-flow','map-evolution','evidence-board','timeline'],
+  },
+  'atmospheric-electricity': {
+    visualWorld: 'atmospheric-electricity',
+    primaryMotifs: ['towering thundercloud','positive and negative charge layers','electric field between cloud and ground','stepped leader descending','upward streamer rising','branching lightning channel','ground strike point','thunder shock wave','storm cell cross-section','fading electrical discharge'],
+    secondaryMotifs: ['ice particle collisions','charged cloud base','opposite charge region','ionized air path','bright return stroke','grounded object','expanding pressure wave','rain curtain'],
+    forbiddenMotifs: ['volcano cone','magma chamber','bacteria colony','generic office dashboard','currency chart'],
+    paletteMood: 'storm-blue-electric-cyan-warning-gold',
+    preferredVisualKinds: ['cause-effect','mechanism','object-exploded','process-flow','before-after','comparison','timeline','world-network','evidence-board','map-evolution'],
+  },
+  volcanology: {
+    visualWorld: 'volcanology',
+    primaryMotifs: ['volcano cone cross-section','magma chamber','tectonic plate boundary','rising magma column','gas pressure pocket','fractured volcanic vent','eruption column','ash cloud','lava flow','collapsed caldera'],
+    secondaryMotifs: ['mantle heat','rock fracture','magma conduit','pressure arrows','crater rim','pyroclastic material','ash particles','cooled lava field'],
+    forbiddenMotifs: ['lightning charge diagram','bacteria colony','generic laptop','currency chart','ancient treaty'],
+    paletteMood: 'charcoal-red-lava-gold-ash',
+    preferredVisualKinds: ['object-exploded','mechanism','cause-effect','process-flow','before-after','timeline','comparison','evidence-board','map-evolution','world-network'],
   },
   'atmospheric-nature': {
     visualWorld: 'atmospheric-nature',
@@ -154,7 +177,7 @@ const profiles: Record<string, Profile> = {
   },
   'general-explainer': {
     visualWorld: 'general-explainer',
-    primaryMotifs: ['main subject','key mechanism','first cause','intermediate step','supporting evidence','critical change','connection path','comparison state','measured result','final consequence'],
+    primaryMotifs: ['topic overview','hidden mechanism','first cause','intermediate step','supporting evidence','critical change','connection path','comparison state','measured result','final consequence'],
     secondaryMotifs: ['source object','process arrow','evidence card','time marker','location node','detail cutaway','result frame','context layer'],
     forbiddenMotifs: ['unrelated generic icon','random world map','decorative chart without meaning'],
     paletteMood: 'editorial-documentary',
@@ -165,7 +188,9 @@ const profiles: Record<string, Profile> = {
 let profileKey = 'general-explainer';
 if (hasAny('artificial intelligence generates images','ai generates images','image generation','diffusion model','latent noise','text to image')) profileKey = 'ai-image-generation';
 else if (hasAny('antibiotic','bacteria','bacterial','microbe','resistance gene','plasmid')) profileKey = 'microbiology';
-else if (hasAny('spider ballooning','spiders fly','silk thread','electric field','air current')) profileKey = 'atmospheric-nature';
+else if (hasAny('lightning','thunderbolt','electrical discharge','storm charge','şimşek','yıldırım','gök gürültüsü')) profileKey = 'atmospheric-electricity';
+else if (hasAny('volcano','volcanic','eruption','magma','lava','volkan','yanardağ','püskürme')) profileKey = 'volcanology';
+else if (hasAny('spider ballooning','spiders fly','silk thread','air current')) profileKey = 'atmospheric-nature';
 else if (hasAny('silk road','trade route','merchant caravan','ancient trade')) profileKey = 'historical-trade';
 else if (hasAny('space','planet','moon','rocket','orbit','asteroid','star')) profileKey = 'space-system';
 else if (String(plan.category).toLowerCase() === 'economy') profileKey = 'economy-network';
@@ -176,32 +201,55 @@ else if (String(plan.category).toLowerCase() === 'technology') profileKey = 'dig
 else if (String(plan.category).toLowerCase() === 'history') profileKey = 'history-documentary';
 else if (String(plan.category).toLowerCase() === 'science') profileKey = 'science-mechanism';
 
-const profile = profiles[profileKey];
+const baseProfile = profiles[profileKey] || profiles['general-explainer'];
+const deriveMotif = (scene: Scene, index: number) => {
+  const tokens = contentTokens(`${scene.title} ${scene.voiceLine}`);
+  const topicTokens = contentTokens(plan.topic);
+  const selected = unique([...tokens.filter((token) => topicTokens.includes(token)), ...tokens]).slice(0, 4);
+  return selected.length >= 2 ? selected.join(' ') : `${topicTokens.slice(0, 3).join(' ') || 'topic'} detail ${index + 1}`;
+};
+const derivedMotifs = unique(scenes.map(deriveMotif)).filter((motif) => contentTokens(motif).length >= 2);
+const profile: Profile = profileKey === 'general-explainer'
+  ? {...baseProfile, primaryMotifs: unique([...derivedMotifs, ...baseProfile.primaryMotifs]).slice(0, 14)}
+  : baseProfile;
+
 const classifyAction = (line: string): SemanticAction => {
   const value = normalize(line);
-  if (/multiply|reproduce|grow|çoğal|artır|increase|replicate/.test(value)) return 'multiply';
-  if (/spread|travel|move|flow|reach|yayıl|taşın|uç|route/.test(value)) return 'spread';
-  if (/survive|select|filter|remove|kill|ele|hayatta|öldür/.test(value)) return 'filter';
+  if (/multiply|reproduce|grow|increase|replicate|çoğal|artır/.test(value)) return 'multiply';
+  if (/spread|travel|move|flow|reach|route|yayıl|taşın|uç/.test(value)) return 'spread';
+  if (/survive|select|filter|remove|kill|hayatta|öldür|ele/.test(value)) return 'filter';
   if (/compare|versus|difference|before|after|karşılaştır|önce|sonra/.test(value)) return 'compare';
   if (/turn|become|generate|create|convert|transform|dönüş|üret|oluştur/.test(value)) return 'transform';
   if (/connect|link|transfer|pass|bağla|aktar/.test(value)) return 'connect';
   if (/assemble|combine|build|merge|birleş|kur/.test(value)) return 'assemble';
   if (/fail|collapse|break|die|stop|çök|bozul|öl/.test(value)) return 'collapse';
-  if (/route|path|timeline|trace|follow|izle|yol/.test(value)) return 'trace';
+  if (/path|timeline|trace|follow|izle|yol/.test(value)) return 'trace';
   return 'reveal';
 };
 
-const motifScore = (motif: string, lineTokens: string[]) => {
-  const motifTokens = contentTokens(motif);
-  return motifTokens.filter((token) => lineTokens.includes(token)).length;
-};
+const motifScore = (motif: string, lineTokens: string[]) => contentTokens(motif).filter((token) => lineTokens.includes(token)).length;
+const motifUsage = new Map<string, number>();
+const diversityTarget = Math.min(6, scenes.length, profile.primaryMotifs.length);
 const chooseMotif = (scene: Scene, index: number, previous: string) => {
-  const lineTokens = contentTokens(`${scene.voiceLine} ${scene.heroVisual} ${(scene.supportVisuals || []).join(' ')}`);
+  const lineTokens = contentTokens(`${scene.voiceLine} ${scene.title} ${scene.sceneGoal}`);
   const ranked = profile.primaryMotifs
-    .map((motif, motifIndex) => ({motif, motifIndex, score: motifScore(motif, lineTokens)}))
-    .sort((a, b) => b.score - a.score || Math.abs(a.motifIndex - index) - Math.abs(b.motifIndex - index));
-  let selected = ranked[0]?.score > 0 ? ranked[0].motif : profile.primaryMotifs[index % profile.primaryMotifs.length];
-  if (selected === previous) selected = profile.primaryMotifs[(profile.primaryMotifs.indexOf(selected) + 1) % profile.primaryMotifs.length];
+    .map((motif, motifIndex) => ({
+      motif,
+      motifIndex,
+      score: motifScore(motif, lineTokens),
+      used: motifUsage.get(motif) || 0,
+    }))
+    .sort((a, b) => {
+      const aUnused = a.used === 0 ? 1 : 0;
+      const bUnused = b.used === 0 ? 1 : 0;
+      if (index < diversityTarget && aUnused !== bUnused) return bUnused - aUnused;
+      return b.score - a.score || a.used - b.used || Math.abs(a.motifIndex - index) - Math.abs(b.motifIndex - index);
+    });
+  let selected = ranked.find((item) => item.motif !== previous)?.motif || ranked[0]?.motif || profile.primaryMotifs[index % profile.primaryMotifs.length];
+  if (selected === previous && profile.primaryMotifs.length > 1) {
+    selected = profile.primaryMotifs.find((motif) => motif !== previous) || selected;
+  }
+  motifUsage.set(selected, (motifUsage.get(selected) || 0) + 1);
   return selected;
 };
 
@@ -216,7 +264,7 @@ const actionMotion: Record<SemanticAction, string> = {
 
 let previousMotif = '';
 let previousKind = '';
-plan.scenes = (plan.scenes as Scene[]).map((scene, index) => {
+plan.scenes = scenes.map((scene, index) => {
   const primaryMotif = chooseMotif(scene, index, previousMotif);
   previousMotif = primaryMotif;
   const secondaryMotif = profile.secondaryMotifs[index % profile.secondaryMotifs.length];
@@ -225,18 +273,19 @@ plan.scenes = (plan.scenes as Scene[]).map((scene, index) => {
   if (visualKind === previousKind) visualKind = profile.preferredVisualKinds[(index + 1) % profile.preferredVisualKinds.length];
   previousKind = visualKind;
 
-  const existingSupports = Array.isArray(scene.supportVisuals) ? scene.supportVisuals.map(String) : [];
-  const mustShow = unique([
-    primaryMotif,
-    secondaryMotif,
-    scene.heroVisual,
-    ...existingSupports,
-  ]).map((value) => compact(value, 88)).slice(0, 6);
+  const existingSupports = Array.isArray(scene.supportVisuals)
+    ? scene.supportVisuals.map(String).filter((value: string) => !isPlaceholder(value))
+    : [];
+  const existingHero = isPlaceholder(scene.heroVisual) ? '' : String(scene.heroVisual || '');
+  const mustShow = unique([primaryMotif, secondaryMotif, existingHero, ...existingSupports])
+    .map((value) => compact(value, 88))
+    .filter(Boolean)
+    .slice(0, 6);
   while (mustShow.length < 2) mustShow.push(profile.primaryMotifs[(index + mustShow.length) % profile.primaryMotifs.length]);
   const lineTokens = contentTokens(`${scene.voiceLine} ${primaryMotif} ${secondaryMotif}`);
   const subjectTokens = unique([...lineTokens, ...contentTokens(plan.topic)]).slice(0, 12);
   while (subjectTokens.length < 2) subjectTokens.push(`scene${index + 1}`);
-  const supportVisuals = unique([primaryMotif, secondaryMotif, ...existingSupports]).slice(0, 5);
+  const supportVisuals = unique([secondaryMotif, ...existingSupports, primaryMotif]).slice(0, 5);
   while (supportVisuals.length < 2) supportVisuals.push(primaryMotif);
   const voiceLine = sentence(scene.voiceLine || scene.title);
   const imagePrompt = [
@@ -268,7 +317,7 @@ plan.scenes = (plan.scenes as Scene[]).map((scene, index) => {
     props: supportVisuals.map((value: string) => compact(value.toLocaleUpperCase(locale), 24)).slice(0, 6),
     sceneGoal: `Illustrate only this spoken claim: ${voiceLine}`,
     imagePrompt,
-    visualSignature: `grounded-v1:${profile.visualWorld}:${index + 1}:${normalize(primaryMotif).replace(/ /g, '-')}`,
+    visualSignature: `grounded-v2:${profile.visualWorld}:${index + 1}:${normalize(primaryMotif).replace(/ /g, '-')}`,
     conceptTags: subjectTokens.slice(0, 12),
     forbiddenTags: profile.forbiddenMotifs.flatMap(contentTokens).slice(0, 12),
     alignmentScore: Math.max(Number(scene.alignmentScore || 0), 0.72),
@@ -294,7 +343,9 @@ const clause = (scene: Scene) => {
 };
 
 const wordCount = (value: unknown) => words(value).length;
-const targetMinimum = Math.max(98, Math.round(Number(plan.duration || 46) * 2.18));
+const targetMinimum = language === 'tr'
+  ? Math.max(88, Math.round(Number(plan.duration || 46) * 1.95))
+  : Math.max(98, Math.round(Number(plan.duration || 46) * 2.18));
 let narrationWords = (plan.scenes as Scene[]).reduce((sum, scene) => sum + wordCount(scene.voiceLine), 0);
 let safety = 0;
 while (narrationWords < targetMinimum && safety < 40) {
@@ -312,11 +363,11 @@ while (narrationWords < targetMinimum && safety < 40) {
 }
 
 plan.narration = (plan.scenes as Scene[]).map((scene) => sentence(scene.voiceLine)).join(' ');
-plan.topicProfile = {...profile, groundingVersion: 1};
+plan.topicProfile = {...profile, groundingVersion: 2};
 plan.v3 = {
   ...(plan.v3 || {}),
   topicGrounding: 'semantic-motif-locked',
-  topicGroundingVersion: 1,
+  topicGroundingVersion: 2,
   visualWorld: profile.visualWorld,
   narrationWordCount: narrationWords,
   naturalVoiceTargetMinimum: targetMinimum,
@@ -326,8 +377,10 @@ const primaryMotifs = (plan.scenes as Scene[]).map((scene) => String(scene.prima
 const uniqueMotifs = new Set(primaryMotifs).size;
 const repeatedMotifs = primaryMotifs.filter((motif, index) => index > 0 && motif === primaryMotifs[index - 1]);
 const kinds = (plan.scenes as Scene[]).map((scene) => String(scene.visualKind));
-if (uniqueMotifs < 4 || repeatedMotifs.length > 0 || new Set(kinds).size < 6) {
-  throw new Error(`Topic grounding failed: motifs=${uniqueMotifs}, consecutive=${repeatedMotifs.length}, visualKinds=${new Set(kinds).size}`);
+const requiredMotifs = Math.min(4, profile.primaryMotifs.length, plan.scenes.length);
+const requiredKinds = Math.min(6, profile.preferredVisualKinds.length, plan.scenes.length);
+if (uniqueMotifs < requiredMotifs || repeatedMotifs.length > 0 || new Set(kinds).size < requiredKinds) {
+  throw new Error(`Topic grounding failed: motifs=${uniqueMotifs}/${requiredMotifs}, consecutive=${repeatedMotifs.length}, visualKinds=${new Set(kinds).size}/${requiredKinds}`);
 }
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
