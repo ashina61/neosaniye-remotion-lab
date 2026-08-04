@@ -3,13 +3,21 @@ import {AbsoluteFill} from 'remotion';
 import planJson from '../../public/auto-factory/plan.json';
 import {AutoShortV4} from './AutoShortV4';
 import {AdaptiveDocumentaryAutoShortV7} from './AdaptiveDocumentaryAutoShortV7';
+import {AdaptiveDocumentaryAutoShortV8} from './AdaptiveDocumentaryAutoShortV8';
 import {BrandWatermark} from './BrandWatermark';
 import {SemanticAutoShortV5} from './SemanticAutoShortV5';
 import {UniversalSemanticAutoShortV6Safe} from './UniversalSemanticAutoShortV6Safe';
 
 const scenes = ((planJson as unknown as {
-  scenes?: Array<{semanticLockRule?: unknown; visualContract?: {version?: unknown}}>;
+  scenes?: Array<{
+    semanticLockRule?: unknown;
+    visualContract?: {version?: unknown};
+    motionContract?: {version?: unknown};
+  }>;
 }).scenes ?? []);
+const useV8DirectorRenderer = scenes.length > 0 && scenes.every(
+  (scene) => scene.visualContract?.version === 8 && scene.motionContract?.version === 8,
+);
 const useAdaptiveRenderer = scenes.length > 0 && scenes.every(
   (scene) => scene.visualContract?.version === 7,
 );
@@ -22,7 +30,9 @@ const useUniversalRenderer = scenes.length > 0 && scenes.every(
 
 export const BrandedAutoShortV4: React.FC = () => (
   <AbsoluteFill>
-    {useAdaptiveRenderer ? (
+    {useV8DirectorRenderer ? (
+      <AdaptiveDocumentaryAutoShortV8 />
+    ) : useAdaptiveRenderer ? (
       <AdaptiveDocumentaryAutoShortV7 />
     ) : useSpecializedRenderer ? (
       <SemanticAutoShortV5 />
