@@ -103,24 +103,37 @@ const sceneRole = (scene, index, total) => {
 const chooseMode = (scene, index, role) => {
   const text = lower(`${scene.title} ${scene.voiceLine} ${(scene.visualContract?.motifs || []).map((item) => item.label).join(' ')}`);
   const modes = profile.modes;
-  if (/map|route|border|across|between|trade|spread|network/.test(text) && modes.some((mode) => /map|cartographic/.test(mode))) {
-    return modes.find((mode) => /map|cartographic/.test(mode));
+  const findMode = (pattern) => modes.find((mode) => pattern.test(mode));
+
+  if (role === 'hook') return findMode(/reconstruction|realism|macro|cosmic|object/) || modes[0];
+  if (role === 'resolution') return findMode(/data|evidence|archive|map|cartographic/) || modes[modes.length - 1];
+  if (role === 'movement') return findMode(/map|cartographic/) || findMode(/system/) || modes[0];
+  if (role === 'comparison') return findMode(/comparison/) || findMode(/data|evidence/) || modes[0];
+  if (role === 'evidence') return findMode(/evidence|archive|data/) || modes[0];
+  if (role === 'setup') {
+    const establishing = findMode(/reconstruction|realism|closeup|object|cosmic|portrait/);
+    if (establishing) return establishing;
   }
-  if (/document|record|archive|evidence|letter|treaty|report|manuscript/.test(text) && modes.includes('archival-evidence')) return 'archival-evidence';
-  if (/person|people|emperor|king|queen|scientist|leader|merchant|soldier|inventor/.test(text) && modes.includes('portrait-focus')) return 'portrait-focus';
+  if (/map|route|border|across|between|trade|spread|network|landing station|continent|global/.test(text)) {
+    const mapMode = findMode(/map|cartographic/) || findMode(/system/);
+    if (mapMode) return mapMode;
+  }
+  if (/document|record|archive|evidence|letter|treaty|report|manuscript/.test(text)) {
+    const evidenceMode = findMode(/archive|evidence|data/);
+    if (evidenceMode) return evidenceMode;
+  }
+  if (/person|people|emperor|king|queen|scientist|leader|merchant|soldier|inventor/.test(text)) {
+    const portraitMode = findMode(/portrait|reconstruction/);
+    if (portraitMode) return portraitMode;
+  }
   if (/inside|layer|core|cutaway|mechanism|component|signal|fiber|cable|cell|dna/.test(text)) {
-    const cutaway = modes.find((mode) => /cutaway|macro|orbital-diagram/.test(mode));
+    const cutaway = findMode(/cutaway|macro|orbital-diagram/);
     if (cutaway) return cutaway;
   }
-  if (role === 'comparison') {
-    const comparison = modes.find((mode) => /comparison/.test(mode));
-    if (comparison) return comparison;
+  if (role === 'mechanism') {
+    const mechanismMode = findMode(/cutaway|macro|diagram|system/);
+    if (mechanismMode) return mechanismMode;
   }
-  if (role === 'evidence') {
-    const evidence = modes.find((mode) => /evidence/.test(mode));
-    if (evidence) return evidence;
-  }
-  if (role === 'hook') return modes.find((mode) => /reconstruction|realism|macro|cosmic|object/.test(mode)) || modes[0];
   return modes[(index + seed) % modes.length];
 };
 
