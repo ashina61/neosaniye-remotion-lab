@@ -88,6 +88,37 @@ const writeState = async (planPath, manifestPath, plan, manifest) => {
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 };
 
+const uniqueByTitle = (items) => {
+  const selected = [];
+  const seen = new Set();
+  for (const item of items) {
+    const key = normalize(item.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    selected.push(item);
+  }
+  return selected;
+};
+
+const rankWithCanonicalDepth = (items, context, limit = 7) => {
+  const dedupedMap = new Map();
+  for (const item of items) {
+    const key = normalize(item.title);
+    if (!key) continue;
+    const previous = dedupedMap.get(key);
+    if (!previous || clean(item.excerpt).length > clean(previous.excerpt).length) dedupedMap.set(key, item);
+  }
+  const deduped = [...dedupedMap.values()];
+  const canonicalSeeds = canonicalResearchSeeds(context.subject, context.topic, context.category);
+  const canonicalOrder = new Map(canonicalSeeds.map((title, index) => [normalize(title), index]));
+  const canonical = deduped
+    .filter((item) => canonicalOrder.has(normalize(item.title)))
+    .sort((a, b) => canonicalOrder.get(normalize(a.title)) - canonicalOrder.get(normalize(b.title)))
+    .map((item, index) => ({...item, researchScore: 1000 - index, canonicalDepthSource: true}));
+  const ranked = rankResearchItems(deduped, context, Math.max(limit * 2, 12));
+  return uniqueByTitle([...canonical, ...ranked]).slice(0, limit);
+};
+
 export const repairResearchDepth = async ({planPath, manifestPath}) => {
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   let manifest = {};
@@ -122,7 +153,7 @@ export const repairResearchDepth = async ({planPath, manifestPath}) => {
     return {changed: false, plan, manifest};
   }
 
-  const existingRanked = rankResearchItems(plan.research || [], context, 7);
+  const existingRanked = rankWithCanonicalDepth(plan.research || [], context, 7);
   const existingLength = existingRanked.reduce((sum, item) => sum + clean(item.excerpt).length, 0);
   let fetched = [];
   let networkError = null;
@@ -135,7 +166,7 @@ export const repairResearchDepth = async ({planPath, manifestPath}) => {
   }
 
   const merged = [...(plan.research || []), ...fetched];
-  const ranked = rankResearchItems(merged, context, 7);
+  const ranked = rankWithCanonicalDepth(merged, context, 7);
   const combinedLength = ranked.reduce((sum, item) => sum + clean(item.excerpt).length, 0);
   if (ranked.length < 3 || combinedLength < 4200) {
     throw new Error(`Research depth repair failed for "${plan.topic}": sources=${ranked.length}, excerptChars=${combinedLength}.`);
@@ -143,26 +174,28 @@ export const repairResearchDepth = async ({planPath, manifestPath}) => {
   const oldTitles = (plan.research || []).map((item) => normalize(item.title)).join('|');
   const newTitles = ranked.map((item) => normalize(item.title)).join('|');
   const changed = oldTitles !== newTitles;
-  plan.research = ranked.map(({researchScore, ...item}) => item);
+  plan.research = ranked.map(({researchScore, canonicalDepthSource, ...item}) => item);
   plan.researchDepth = {
-    version: 1,
-    mode: networkError ? 'existing-ranked-fallback' : 'batched-wikipedia-depth',
+    version: 2,
+    mode: networkError ? 'existing-ranked-fallback' : 'canonical-batched-wikipedia-depth',
     subject,
     sourceCount: ranked.length,
     excerptCharacters: combinedLength,
-    selected: ranked.map((item) => ({title: item.title, score: item.researchScore})),
+    selected: ranked.map((item) => ({title: item.title, score: item.researchScore, canonical: Boolean(item.canonicalDepthSource)})),
+    canonicalSourceCount: ranked.filter((item) => item.canonicalDepthSource).length,
     failClosed: true,
     networkDegraded: Boolean(networkError),
   };
   manifest.researchCount = ranked.length;
   manifest.researchDepthSubject = subject;
   manifest.researchDepthCharacters = combinedLength;
+  manifest.researchCanonicalSourceCount = plan.researchDepth.canonicalSourceCount;
   if (changed && manifest.aiPlan === true) {
     manifest.aiPlan = false;
     manifest.aiPlanInvalidatedByResearchDepth = true;
   }
   await writeState(planPath, manifestPath, plan, manifest);
-  console.log(`Research depth repaired: subject="${subject}", sources=${ranked.map((item) => item.title).join(' | ')}, excerptChars=${combinedLength}`);
+  console.log(`Research depth repaired: subject="${subject}", sources=${ranked.map((item) => item.title).join(' | ')}, excerptChars=${combinedLength}, canonical=${plan.researchDepth.canonicalSourceCount}`);
   return {changed, plan, manifest};
 };
 
