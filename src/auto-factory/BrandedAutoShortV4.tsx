@@ -3,8 +3,8 @@ import {AbsoluteFill} from 'remotion';
 import planJson from '../../public/auto-factory/plan.json';
 import {AutoShortV4} from './AutoShortV4';
 import {AdaptiveDocumentaryAutoShortV7} from './AdaptiveDocumentaryAutoShortV7';
-import {AdaptiveDocumentaryAutoShortV8} from './AdaptiveDocumentaryAutoShortV8';
 import {BrandWatermark} from './BrandWatermark';
+import {DirectedAutoShortV8} from './DirectedAutoShortV8';
 import {SemanticAutoShortV5} from './SemanticAutoShortV5';
 import {UniversalSemanticAutoShortV6Safe} from './UniversalSemanticAutoShortV6Safe';
 
@@ -31,7 +31,7 @@ const useUniversalRenderer = scenes.length > 0 && scenes.every(
 export const BrandedAutoShortV4: React.FC = () => (
   <AbsoluteFill>
     {useV8DirectorRenderer ? (
-      <AdaptiveDocumentaryAutoShortV8 />
+      <DirectedAutoShortV8 />
     ) : useAdaptiveRenderer ? (
       <AdaptiveDocumentaryAutoShortV7 />
     ) : useSpecializedRenderer ? (
