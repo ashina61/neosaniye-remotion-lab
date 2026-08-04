@@ -13,6 +13,11 @@ const normalize = (value: string) => value
   .replace(/\s+/g, ' ')
   .trim();
 const compact = (value: string, maxWords = 7) => value.replace(/\s+/g, ' ').trim().split(' ').slice(0, maxWords).join(' ');
+const PLACEHOLDERS = new Set([
+  'main subject','supporting detail','key mechanism','source object','context layer','unique scene',
+  'ana konu','destekleyici detay','ana nesne',
+]);
+const isPlaceholder = (value: string) => PLACEHOLDERS.has(normalize(value));
 
 const chooseAlternative = (kind: VisualKind, text: string): VisualKind => {
   const value = normalize(text);
@@ -85,31 +90,59 @@ const antibioticHeroPool = plan.language === 'en'
       'dirençli koloni oluşturan seçilim',
     ];
 
+const genericRoles = plan.language === 'en'
+  ? [
+      'overview','source condition','hidden mechanism','first transition','critical component',
+      'pressure point','visible effect','comparison state','movement path','evidence detail',
+      'system interaction','main consequence','protective response','final explanation',
+      'timeline stage','resulting pattern','environmental route','closing evidence',
+    ]
+  : [
+      'genel görünüm','başlangıç koşulu','gizli mekanizma','ilk dönüşüm','kritik bileşen',
+      'baskı noktası','görünür etki','karşılaştırma durumu','hareket rotası','kanıt detayı',
+      'sistem etkileşimi','ana sonuç','koruyucu tepki','son açıklama',
+      'zaman aşaması','oluşan desen','çevresel rota','kapanış kanıtı',
+    ];
+const topicStem = compact(
+  String(plan.topic || plan.title)
+    .replace(/^(how|why|what|when|where|nasıl|neden|ne)\s+/i, '')
+    .replace(/[?!.,]+$/g, ''),
+  5,
+) || (plan.language === 'en' ? 'topic' : 'konu');
+
 const usedHeroes = new Set<string>();
 for (let index = 0; index < plan.scenes.length; index += 1) {
   const scene = plan.scenes[index];
-  let candidate = compact(scene.heroVisual, 8);
-  const key = normalize(candidate);
-  if (!usedHeroes.has(key)) {
-    usedHeroes.add(key);
-    scene.heroVisual = candidate;
+  const current = compact(scene.heroVisual, 8);
+  const currentKey = normalize(current);
+  const currentUsable = current && !isPlaceholder(current) && !usedHeroes.has(currentKey);
+  if (currentUsable) {
+    scene.heroVisual = current;
+    usedHeroes.add(currentKey);
     continue;
   }
 
-  const profileCandidate = plan.v3?.profile === 'antibiotic-resistance' ? antibioticHeroPool[index] : undefined;
-  const supportCandidate = compact(`${candidate} ${scene.supportVisuals[index % scene.supportVisuals.length] || scene.title}`, 8);
-  const candidates = [profileCandidate, supportCandidate, compact(`${scene.title} ${candidate}`, 8), `${candidate} ${index + 1}`].filter(Boolean) as string[];
+  const profileCandidate = plan.v3?.profile === 'antibiotic-resistance'
+    ? antibioticHeroPool[index % antibioticHeroPool.length]
+    : compact(`${topicStem} ${genericRoles[index % genericRoles.length]}`, 8);
+  const semanticSupport = (scene.supportVisuals || []).find((value) => value && !isPlaceholder(String(value)));
+  const candidates = [
+    profileCandidate,
+    semanticSupport ? compact(`${topicStem} ${semanticSupport}`, 8) : '',
+    compact(`${topicStem} ${genericRoles[(index + 3) % genericRoles.length]}`, 8),
+    compact(`${topicStem} scene ${index + 1}`, 8),
+  ].filter(Boolean);
   const replacement = candidates.find((value) => !usedHeroes.has(normalize(value)));
   if (!replacement) throw new Error(`V3 could not diversify hero visual for scene-${scene.id}`);
 
   scene.heroVisual = replacement;
   scene.visualSignature = `${scene.visualSignature}:hero:${normalize(replacement)}`;
-  scene.beats[0].label = compact(replacement, 7);
+  if (scene.beats[0]) scene.beats[0].label = compact(replacement, 7);
   scene.sceneGoal = plan.language === 'en'
     ? `Show ${replacement} while the narration explains: ${scene.voiceLine}`
     : `${scene.voiceLine} anlatılırken ${replacement} görselini göster`;
   usedHeroes.add(normalize(replacement));
-  console.log(`V3 hero diversify scene-${scene.id}: ${candidate} -> ${replacement}`);
+  console.log(`V3 hero diversify scene-${scene.id}: ${current || 'placeholder'} -> ${replacement}`);
 }
 
 const consecutiveKinds = plan.scenes.filter((scene, index) => index > 0 && scene.visualKind === plan.scenes[index - 1].visualKind);
