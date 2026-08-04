@@ -1,4 +1,4 @@
-name: NeoSaniye Auto Factory V3.2
+name: NeoSaniye Auto Factory V4.0
 
 on:
   workflow_dispatch:
@@ -72,7 +72,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: auto-factory-v32-${{ github.ref }}-${{ github.run_id }}
+  group: auto-factory-v4-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -135,9 +135,9 @@ jobs:
         id: density
         run: npx tsx scripts/auto-factory/normalize-scene-density.ts
 
-      - name: Lock narration to concrete topic visuals
-        id: v3
-        run: npm run auto:v3
+      - name: Build topic-locked V4 scene grammar
+        id: v4
+        run: npm run auto:v4
 
       - name: Generate optional image layers
         run: npm run auto:images
@@ -148,7 +148,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Render Full HD V3.2 documentary
+      - name: Render Full HD V4 collage documentary
         run: npm run render:auto
 
       - name: Lock final duration and loudness
@@ -168,13 +168,13 @@ jobs:
             -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 48000 -ac 2 \
             -t "${TARGET_DURATION}" -movflags +faststart out/auto-factory-mobile.mp4
 
-      - name: Build V3.2 contact sheet
+      - name: Build V4 contact sheet
         run: |
           mkdir -p out/review
           ffmpeg -y -i out/auto-factory-fullhd.mp4 \
             -vf "fps=1/3.2,scale=270:-1,tile=3x5" -frames:v 1 out/review/contact.jpg
 
-      - name: V3.2 quality control
+      - name: V4 quality control
         run: npm run auto:qc
 
       - name: Print QC diagnostics
@@ -191,7 +191,9 @@ jobs:
           for key in (
               'scene_count', 'minimum_scene_duration', 'max_internal_silence',
               'minimum_post_speech_hold', 'final_audio_tail', 'scene_timing_errors',
-              'caption_errors', 'forbidden_concept_leaks'
+              'caption_errors', 'forbidden_concept_leaks', 'v4_unique_scene_grammars',
+              'v4_unique_camera_moves', 'v4_average_adjacent_layout_similarity',
+              'v4_rendered_near_duplicate_pairs'
           ):
               if key in report:
                   print(f'QC_{key.upper()}={report[key]}')
@@ -218,15 +220,23 @@ jobs:
         if: ${{ always() }}
         run: |
           {
-            echo "# NeoSaniye Auto Factory V3.2"
+            echo "# NeoSaniye Auto Factory V4.0"
             echo ""
             echo "**Topic:** ${{ steps.plan.outputs.topic }}"
             echo ""
             echo "**Language / voice:** ${LANGUAGE} / ${VOICE}"
             echo ""
-            echo "**Profile:** ${{ steps.v3.outputs.profile }}"
+            echo "**Profile:** ${{ steps.v4.outputs.profile }}"
             echo ""
-            echo "**Scenes:** ${{ steps.v3.outputs.scene_count }}"
+            echo "**Renderer:** ${{ steps.v4.outputs.renderer }}"
+            echo ""
+            echo "**Scene grammars:** ${{ steps.v4.outputs.grammar_count }}"
+            echo ""
+            echo "**Camera patterns:** ${{ steps.v4.outputs.camera_count }}"
+            echo ""
+            echo "**Scenes:** ${{ steps.v4.outputs.scene_count }}"
+            echo ""
+            echo "**Fixed bottom caption:** removed"
             echo ""
             echo "**Branding:** NeoSaniye watermark, top-left safe area"
             echo ""
@@ -235,11 +245,11 @@ jobs:
             echo "**Music:** off"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload V3.2 diagnostics and artifact
+      - name: Upload V4 diagnostics and artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: neosaniye-v32-${{ steps.plan.outputs.slug || 'diagnostics' }}
+          name: neosaniye-v4-${{ steps.plan.outputs.slug || 'diagnostics' }}
           if-no-files-found: warn
           path: |
             out/${{ steps.plan.outputs.slug }}-package.zip
