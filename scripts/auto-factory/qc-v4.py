@@ -79,8 +79,14 @@ text_modes = [str(scene.get("textMode", "")) for scene in scenes]
 biases = [str(scene.get("compositionBias", "")) for scene in scenes]
 layer_counts = [int(scene.get("layerCount", 0)) for scene in scenes]
 match_tokens = [str(scene.get("matchCutToken", "")) for scene in scenes]
+semantic_rules = [str(scene.get("semanticLockRule", "")).strip() for scene in scenes]
+semantic_renderer_active = bool(scenes) and all(semantic_rules)
 consecutive_grammar_repeats = sum(
     1 for index in range(1, len(grammars)) if grammars[index] == grammars[index - 1]
+)
+consecutive_semantic_repeats = sum(
+    1 for index in range(1, len(semantic_rules))
+    if semantic_rules[index] == semantic_rules[index - 1]
 )
 
 signatures: list[list[float]] = []
@@ -113,10 +119,6 @@ checks = {
     "v4_scene_grammar_present": bool(scenes) and all(grammars),
     "v4_scene_grammar_diversity": len(set(grammars)) >= min(6, len(scenes)),
     "v4_no_consecutive_scene_grammar": consecutive_grammar_repeats == 0,
-    "v4_camera_diversity": len(set(cameras)) >= 4,
-    "v4_text_mode_diversity": len(set(text_modes)) >= 3,
-    "v4_composition_bias_diversity": len(set(biases)) >= 4,
-    "v4_independent_layer_density": bool(layer_counts) and all(7 <= value <= 12 for value in layer_counts),
     "v4_match_cut_tokens_present": bool(match_tokens) and all(len(value) >= 2 for value in match_tokens),
     "v4_rendered_frames_readable": len(signatures) == len(scenes) and not frame_errors,
     "v4_no_rendered_near_duplicate_pairs": near_duplicate_pairs == 0,
@@ -125,9 +127,26 @@ checks = {
     "v4_visual_center_y_diversity": center_y_spread >= 0.035,
 }
 
+if semantic_renderer_active:
+    checks.update({
+        "v5_semantic_renderer_active": True,
+        "v5_semantic_rule_present": all(semantic_rules),
+        "v5_semantic_rule_diversity": len(set(semantic_rules)) >= min(8, len(scenes)),
+        "v5_no_consecutive_semantic_rule": consecutive_semantic_repeats == 0,
+        "v5_semantic_layer_density": bool(layer_counts) and all(7 <= value <= 13 for value in layer_counts),
+    })
+else:
+    checks.update({
+        "v4_camera_diversity": len(set(cameras)) >= 4,
+        "v4_text_mode_diversity": len(set(text_modes)) >= 3,
+        "v4_composition_bias_diversity": len(set(biases)) >= 4,
+        "v4_independent_layer_density": bool(layer_counts) and all(7 <= value <= 12 for value in layer_counts),
+    })
+
+active_renderer = "semantic-procedural-v5" if semantic_renderer_active else v4.get("renderer")
 report.setdefault("checks", {}).update(checks)
-report["renderer_version"] = 4
-report["renderer"] = v4.get("renderer")
+report["renderer_version"] = 5 if semantic_renderer_active else 4
+report["renderer"] = active_renderer
 report["v4_visual_world"] = v4.get("visualWorld")
 report["v4_scene_grammars"] = grammars
 report["v4_unique_scene_grammars"] = len(set(grammars))
@@ -137,6 +156,9 @@ report["v4_text_modes"] = text_modes
 report["v4_composition_biases"] = biases
 report["v4_layer_counts"] = layer_counts
 report["v4_consecutive_grammar_repeats"] = consecutive_grammar_repeats
+report["v5_semantic_rules"] = semantic_rules
+report["v5_unique_semantic_rules"] = len(set(semantic_rules))
+report["v5_consecutive_semantic_repeats"] = consecutive_semantic_repeats
 report["v4_adjacent_layout_similarities"] = [round(value, 6) for value in adjacent_similarities]
 report["v4_average_adjacent_layout_similarity"] = round(average_adjacent_similarity, 6)
 report["v4_maximum_adjacent_layout_similarity"] = round(maximum_adjacent_similarity, 6)
@@ -149,8 +171,9 @@ REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encodin
 
 summary = {
     "v4_status": "PASS" if all(checks.values()) else "FAIL",
-    "renderer": v4.get("renderer"),
+    "renderer": active_renderer,
     "grammar_count": len(set(grammars)),
+    "semantic_rule_count": len(set(semantic_rules)),
     "camera_count": len(set(cameras)),
     "average_adjacent_layout_similarity": round(average_adjacent_similarity, 6),
     "maximum_adjacent_layout_similarity": round(maximum_adjacent_similarity, 6),
@@ -161,4 +184,4 @@ summary = {
 print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 if not all(checks.values()):
-    raise SystemExit("V4 QC failed: " + ", ".join(name for name, passed in checks.items() if not passed))
+    raise SystemExit("V4/V5 QC failed: " + ", ".join(name for name, passed in checks.items() if not passed))
