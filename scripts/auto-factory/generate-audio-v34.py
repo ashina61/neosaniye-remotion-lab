@@ -22,6 +22,15 @@ language = str(module.PLAN.get("language", "tr"))
 # small explicit pause instead so the complete acoustic boundary remains natural.
 module.INTER_SCENE_PAUSE = 0.12 if language == "en" else 0.16
 
+# Keep the renderer-facing value inside the Zod schema contract. The measured
+# postSpeechHold remains untouched in scene-timing.json for QC and diagnostics.
+MIN_VOICE_END_PADDING = 0.02
+MAX_VOICE_END_PADDING = 0.8
+
+
+def clamp_voice_end_padding(value: float) -> float:
+    return round(max(MIN_VOICE_END_PADDING, min(MAX_VOICE_END_PADDING, value)), 3)
+
 
 def rate_ratio(value: str) -> float:
     match = re.fullmatch(r"\s*([+-]?\d+(?:\.\d+)?)%\s*", value)
@@ -60,6 +69,7 @@ def synchronize_audio_text() -> None:
 
     canonical_lines: list[str] = []
     holds: list[float] = []
+    clamped_padding_scenes: list[int] = []
     duration = float(plan.get("duration", timing.get("duration", 0)))
     for index, (scene, item) in enumerate(zip(scenes, measured)):
         line = str(item.get("line", "")).strip()
@@ -74,6 +84,9 @@ def synchronize_audio_text() -> None:
         clip_end = float(item.get("speechStart", 0)) + float(item.get("fittedDuration", 0))
         audible_end = max(float(item.get("speechStart", 0)), clip_end - fitted_tail)
         post_hold = max(0.0, scene_end - audible_end)
+        voice_end_padding = clamp_voice_end_padding(post_hold)
+        if abs(voice_end_padding - round(post_hold, 3)) > 1e-9:
+            clamped_padding_scenes.append(int(scene.get("id", index + 1)))
 
         item["voiceEnd"] = round(audible_end, 6)
         item["postSpeechHold"] = round(post_hold, 6)
@@ -81,7 +94,7 @@ def synchronize_audio_text() -> None:
         item["estimatedAcousticBoundary"] = round(estimated_boundary, 6)
         scene["voiceLine"] = line
         scene["sceneGoal"] = f"Illustrate only this spoken claim: {line}"
-        scene["voiceEndPadding"] = round(post_hold, 3)
+        scene["voiceEndPadding"] = voice_end_padding
         canonical_lines.append(line)
         holds.append(post_hold)
 
@@ -90,6 +103,8 @@ def synchronize_audio_text() -> None:
     plan["v3"]["boundaryPauseModel"] = "retained-tail-plus-short-explicit-gap"
     plan["v3"]["estimatedAcousticBoundary"] = round(estimated_boundary, 6)
     plan["v3"]["minimumPostSpeechHold"] = round(min(holds[:-1], default=0.0), 6)
+    plan["v3"]["voiceEndPaddingRange"] = [MIN_VOICE_END_PADDING, MAX_VOICE_END_PADDING]
+    plan["v3"]["voiceEndPaddingClampedScenes"] = clamped_padding_scenes
 
     timing["interScenePause"] = float(module.INTER_SCENE_PAUSE)
     timing["explicitInterScenePause"] = float(module.INTER_SCENE_PAUSE)
@@ -107,6 +122,11 @@ def synchronize_audio_text() -> None:
     timing_lines = [str(item.get("line", "")).strip() for item in disk_timing.get("scenes", [])]
     if disk_lines != timing_lines:
         raise RuntimeError("V3.4 canonical audio text readback failed")
+    if any(
+        not MIN_VOICE_END_PADDING <= float(scene.get("voiceEndPadding", 0)) <= MAX_VOICE_END_PADDING
+        for scene in disk_plan.get("scenes", [])
+    ):
+        raise RuntimeError("V3.4 voiceEndPadding normalization failed")
     if estimated_boundary > 0.44:
         raise RuntimeError(
             f"V3.4 acoustic boundary budget failed: {estimated_boundary:.3f}s exceeds 0.44s"
@@ -120,7 +140,8 @@ def synchronize_audio_text() -> None:
         f"V3.4 canonical audio synchronized: {len(canonical_lines)} scenes, "
         f"explicit pause={module.INTER_SCENE_PAUSE:.2f}s, "
         f"estimated acoustic boundary={estimated_boundary:.3f}s, "
-        f"minimum visual hold={min(holds[:-1], default=0.0):.3f}s"
+        f"minimum visual hold={min(holds[:-1], default=0.0):.3f}s, "
+        f"clamped padding scenes={clamped_padding_scenes or 'none'}"
     )
 
 
