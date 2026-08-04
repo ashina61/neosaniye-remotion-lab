@@ -16,7 +16,7 @@
     "dollar:v16:audio": "python3 scripts/generate-dollar-v16-audio.py",
     "auto:plan": "tsx scripts/auto-factory/generate-plan.ts",
     "auto:v3": "tsx scripts/auto-factory/v3-postprocess.ts && tsx scripts/auto-factory/v3-diversify.ts && tsx scripts/auto-factory/v3-sanitize-topic.ts && tsx scripts/auto-factory/v3-readability.ts && node scripts/auto-factory/v3-content-repair.mjs && tsx scripts/auto-factory/v3-topic-grounding.ts && node scripts/auto-factory/v3-topic-specialize.mjs && node scripts/auto-factory/v3-forbidden-concepts.mjs && tsx scripts/auto-factory/v3-voice-naturalize.ts && tsx scripts/auto-factory/localize-renderer.ts",
-    "auto:v4": "npm run auto:v3 && node scripts/auto-factory/v4-scene-grammar.mjs",
+    "auto:v4": "node scripts/auto-factory/test-topic-grounding-diversity.mjs && npm run auto:v3 && node scripts/auto-factory/v4-scene-grammar.mjs",
     "auto:images": "tsx scripts/auto-factory/generate-images.ts",
     "auto:audio": "python3 scripts/auto-factory/test-audio-boundary-model.py && python3 scripts/auto-factory/generate-audio-v36.py",
     "auto:qc": "python3 scripts/auto-factory/test-forbidden-concept-matching.py && python3 scripts/auto-factory/qc.py && python3 scripts/auto-factory/qc-v31.py && python3 scripts/auto-factory/qc-topic-grounding.py && python3 scripts/auto-factory/qc-v4.py",
