@@ -35,7 +35,7 @@ const rules = [
     secondaryMotif: 'donor and recipient bacteria',
     supportVisuals: ['plasmid ring', 'resistance gene', 'donor bacterium', 'recipient bacterium'],
     visualKind: 'gene-transfer', sceneGrammar: 'mechanism-cutaway', shotType: 'diagram', layout: 'process',
-    semanticAction: 'transfer', cameraMove: 'pan-right', textMode: 'integrated', compositionBias: 'center', layerCount: 10,
+    semanticAction: 'connect', cameraMove: 'pan-right', textMode: 'integrated', compositionBias: 'center', layerCount: 10,
   }),
   rule('dna-mutation', /\b(mutation|mutated|acquired resistance gene|bacterial dna)\b/i, {
     title: 'DNA MUTATION', kicker: 'A CHANGE CAN CREATE RESISTANCE',
@@ -207,7 +207,7 @@ if (mode === 'repair' && language === 'en' && isAntibioticProfile) {
         {
           at: 0.46,
           label: compact(supportVisuals[0], 7, 100),
-          action: currentRule.semanticAction === 'transfer' ? 'transfer'
+          action: currentRule.id === 'plasmid-transfer' ? 'transfer'
             : currentRule.semanticAction === 'multiply' ? 'multiply'
               : currentRule.semanticAction === 'filter' ? 'eliminate'
                 : currentRule.semanticAction === 'compare' ? 'swap'
