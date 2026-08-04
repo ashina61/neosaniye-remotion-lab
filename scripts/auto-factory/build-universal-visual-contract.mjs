@@ -33,10 +33,18 @@ const isGeneric = (value) => {
   return !n || GENERIC.has(n) || contentTokens(n).length === 0;
 };
 const hasWrongLanguage = (value) => language === 'en' && (/[çğıöşüİ]/u.test(String(value || '')) || TURKISH_LEAK_WORDS.test(String(value || '')));
-const truncate = (value, max = 56) => {
+const truncate = (value, max = 42) => {
   const text = clean(value).replace(/[.!?;:]+$/g, '');
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trim()}…`;
+  const words = text.split(/\s+/).filter(Boolean);
+  let result = '';
+  for (const word of words) {
+    const candidate = result ? `${result} ${word}` : word;
+    if (candidate.length > max) break;
+    result = candidate;
+  }
+  if (result.length >= 3) return result;
+  return text.slice(0, max).trim();
 };
 const unique = (values) => {
   const result = [];
