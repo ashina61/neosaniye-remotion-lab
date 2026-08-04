@@ -51,6 +51,10 @@ scene_subject_text = [
     ])
     for scene in scenes
 ]
+image_prompt_grounding_overlaps = [
+    len(tokens(scene.get("imagePrompt", "")) & tokens(subject_text))
+    for scene, subject_text in zip(scenes, scene_subject_text)
+]
 forbidden_leaks = [
     index + 1
     for index, text in enumerate(scene_subject_text)
@@ -78,8 +82,7 @@ checks = {
     "no_consecutive_topic_motif": consecutive_motifs == 0,
     "grounded_visual_kind_diversity": len(set(visual_kinds)) >= 6,
     "topic_image_prompts_present": bool(scenes) and all(
-        norm(plan.get("topic")) in norm(scene.get("imagePrompt", ""))
-        for scene in scenes
+        overlap >= 2 for overlap in image_prompt_grounding_overlaps
     ),
     "forbidden_topic_motifs_absent": not forbidden_leaks,
     "natural_scene_voice_rate": bool(rate_values) and all(-3 <= value <= 3 for value in rate_values),
@@ -96,6 +99,8 @@ report["topic_visual_world"] = profile.get("visualWorld")
 report["topic_primary_motif_count"] = len(set(motifs))
 report["topic_consecutive_motif_repeats"] = consecutive_motifs
 report["topic_forbidden_motif_leaks"] = forbidden_leaks
+report["minimum_image_prompt_grounding_overlap"] = min(image_prompt_grounding_overlaps, default=0)
+report["image_prompt_grounding_overlaps"] = image_prompt_grounding_overlaps
 report["narration_word_count"] = narration_word_count
 report["narration_word_range"] = [minimum_words, maximum_words]
 report["scene_voice_rates"] = voice_rates
@@ -111,6 +116,8 @@ summary = {
     "unique_primary_motifs": len(set(motifs)),
     "consecutive_motif_repeats": consecutive_motifs,
     "visual_kind_count": len(set(visual_kinds)),
+    "minimum_image_prompt_grounding_overlap": min(image_prompt_grounding_overlaps, default=0),
+    "image_prompt_grounding_overlaps": image_prompt_grounding_overlaps,
     "narration_word_count": narration_word_count,
     "narration_word_range": [minimum_words, maximum_words],
     "natural_audio_tempo": audio_speed,
