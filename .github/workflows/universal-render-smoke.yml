@@ -1,4 +1,4 @@
-name: Adaptive V7 Topic Render Smoke
+name: V8 Visual Motion Render Smoke
 
 on:
   pull_request:
@@ -54,37 +54,39 @@ jobs:
           npm install --no-audit --no-fund
           python -m pip install --disable-pip-version-check edge-tts
 
-      - name: Build unrelated-topic V7 plan
+      - name: Build unrelated-topic V8 plan
         run: |
           npm run auto:plan
           npx tsx scripts/auto-factory/normalize-scene-density.ts
-          npm run auto:v7
+          npm run auto:v8
           npm run auto:images
           npm run auto:audio
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Render adaptive V7 video
+      - name: Render V8 directed video
         run: npm run render:auto
 
-      - name: Build V7 contact sheet
+      - name: Build V8 contact sheet
         run: |
           mkdir -p out/review
-          ffmpeg -y -i out/auto-factory-fullhd.mp4 -vf "fps=1/3.0,scale=270:-1,tile=3x5" -frames:v 1 out/review/adaptive-v7-contact.jpg
+          ffmpeg -y -i out/auto-factory-fullhd.mp4 -vf "fps=1/3.0,scale=270:-1,tile=3x5" -frames:v 1 out/review/v8-contact.jpg
 
-      - name: V7 quality control
-        run: npm run auto:qc
+      - name: V8 director quality control
+        run: |
+          npm run auto:v8:test
+          python3 scripts/auto-factory/qc-v8-directors.py
 
-      - name: Upload adaptive V7 smoke artifact
+      - name: Upload V8 smoke artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: adaptive-v7-undersea-cables-smoke
+          name: v8-undersea-cables-smoke
           if-no-files-found: warn
           retention-days: 3
           path: |
             out/auto-factory-fullhd.mp4
             out/production-report.json
-            out/review/adaptive-v7-contact.jpg
+            out/review/v8-contact.jpg
             public/auto-factory/plan.json
