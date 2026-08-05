@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - 'src/auto-factory/SemanticVisualAutoShortV9.tsx'
+      - 'src/auto-factory/V9SemanticRepresentationalOverlay.tsx'
+      - 'src/auto-factory/RepresentationalAutoShortV9.tsx'
       - 'src/auto-factory/BrandedAutoShortV4.tsx'
       - 'scripts/auto-factory/*v9*'
       - 'docs/V9_MASTER_PLAN.md'
@@ -47,6 +49,7 @@ jobs:
         run: |
           node --check scripts/auto-factory/v9-ai-provider-router.mjs
           node --check scripts/auto-factory/build-semantic-visual-blueprint-v9.mjs
+          node --check scripts/auto-factory/repair-v9-semantic-families.mjs
           node --check scripts/auto-factory/generate-v9-ai-assets.mjs
           node --check scripts/auto-factory/test-v9-semantic-visual-brain.mjs
           node --check scripts/auto-factory/create-v9-silk-road-fixture.mjs
@@ -62,6 +65,7 @@ jobs:
       - name: Run Gemini semantic brain
         run: |
           npm run auto:v9:brain
+          node scripts/auto-factory/repair-v9-semantic-families.mjs
           python3 scripts/auto-factory/qc-v9-semantic-blueprint.py
           python3 - <<'PY'
           import json
@@ -70,6 +74,8 @@ jobs:
           v9 = plan.get('v9', {})
           families = [scene.get('v9Blueprint', {}).get('sceneFamily') for scene in plan.get('scenes', [])]
           print('V9_PROVIDER=' + str(v9.get('brainProvider')))
+          print('V9_MODEL=' + str(v9.get('brainModel')))
+          print('V9_ATTEMPTS=' + json.dumps(v9.get('providerAttempts', [])))
           print('V9_FAMILIES=' + ','.join(map(str, families)))
           print('V9_REPRESENTATIONAL_RATIO=' + str(v9.get('representationalRatio')))
           print('V9_MAP_SCENES=' + str(v9.get('mapSceneCount')))
