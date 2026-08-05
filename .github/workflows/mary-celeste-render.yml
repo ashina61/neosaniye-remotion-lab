@@ -42,9 +42,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Verify FFmpeg
-        run: ffmpeg -version | head -n 1
-
       - name: Install Node dependencies
         run: npm install
 
