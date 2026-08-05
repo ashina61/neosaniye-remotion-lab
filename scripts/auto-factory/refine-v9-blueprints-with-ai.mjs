@@ -13,6 +13,23 @@ const sanitizeAiText = (value) => clean(value)
 const unique = (values) => [...new Set((values || []).map(sanitizeAiText).filter(Boolean))];
 const scenes = plan.scenes || [];
 
+const lockedFamilies = new Map(
+  scenes.map((scene, index) => [
+    Number(scene.id),
+    index === scenes.length - 1
+      ? 'consequence-world'
+      : clean(scene.v9Blueprint?.sceneFamily),
+  ]),
+);
+const lockedDecisionSources = new Map(
+  scenes.map((scene, index) => [
+    Number(scene.id),
+    index === scenes.length - 1
+      ? 'mandatory-ending-consequence'
+      : clean(scene.v9Blueprint?.familyDecisionSource),
+  ]),
+);
+
 const request = {
   task: 'Enrich locked semantic scene blueprints for a vertical editorial documentary.',
   topic: plan.topic,
@@ -43,8 +60,8 @@ const request = {
     excerpt: clean(item.excerpt || item.snippet).slice(0, 420),
   })),
   scenes: scenes.map((scene) => ({
-    sceneId: scene.id,
-    lockedSceneFamily: scene.v9Blueprint?.sceneFamily,
+    sceneId: Number(scene.id),
+    lockedSceneFamily: lockedFamilies.get(Number(scene.id)),
     narration: clean(scene.voiceLine),
     mustShow: scene.mustShow || [],
     currentWorldEntities: scene.v9Blueprint?.worldEntities || [],
@@ -75,9 +92,21 @@ const candidates = new Map(
 let refinedCount = 0;
 
 for (const scene of scenes) {
+  const sceneId = Number(scene.id);
   const current = scene.v9Blueprint || {};
-  const candidate = candidates.get(Number(scene.id));
-  if (!candidate) continue;
+  const lockedFamily = lockedFamilies.get(sceneId) || clean(current.sceneFamily);
+  const lockedDecisionSource = lockedDecisionSources.get(sceneId) || clean(current.familyDecisionSource);
+  const candidate = candidates.get(sceneId);
+
+  if (!candidate) {
+    scene.v9Blueprint = {
+      ...current,
+      sceneId,
+      sceneFamily: lockedFamily,
+      familyDecisionSource: lockedDecisionSource,
+    };
+    continue;
+  }
 
   const foreground = unique(candidate.foreground || candidate.layerPlan?.foreground);
   const midground = unique(candidate.midground || candidate.layerPlan?.midground);
@@ -97,9 +126,9 @@ for (const scene of scenes) {
 
   scene.v9Blueprint = {
     ...current,
-    sceneId: Number(scene.id),
-    sceneFamily: current.sceneFamily,
-    familyDecisionSource: current.familyDecisionSource,
+    sceneId,
+    sceneFamily: lockedFamily,
+    familyDecisionSource: lockedDecisionSource,
     visualStatement: visualStatement || current.visualStatement,
     worldEntities: worldEntities.length >= 2 ? worldEntities : current.worldEntities,
     spatialRelations: [
@@ -131,6 +160,40 @@ for (const scene of scenes) {
   refinedCount += 1;
 }
 
+for (const [index, scene] of scenes.entries()) {
+  const sceneId = Number(scene.id);
+  const expectedFamily = index === scenes.length - 1
+    ? 'consequence-world'
+    : lockedFamilies.get(sceneId);
+  if (!expectedFamily) {
+    throw new Error(`V9 scene ${sceneId} had no locked semantic family before AI refinement.`);
+  }
+  scene.v9Blueprint = {
+    ...(scene.v9Blueprint || {}),
+    sceneId,
+    sceneFamily: expectedFamily,
+    familyDecisionSource: index === scenes.length - 1
+      ? 'mandatory-ending-consequence'
+      : lockedDecisionSources.get(sceneId) || scene.v9Blueprint?.familyDecisionSource,
+  };
+  if (scene.v9Blueprint.sceneFamily !== expectedFamily) {
+    throw new Error(`V9 scene ${sceneId} family lock failed: ${scene.v9Blueprint.sceneFamily} != ${expectedFamily}`);
+  }
+}
+
+const sceneFamilies = scenes.map((scene) => clean(scene.v9Blueprint?.sceneFamily));
+const physicalFamilies = new Set([
+  'human-reconstruction',
+  'environmental-reconstruction',
+  'industrial-process',
+  'mechanism-cutaway',
+  'microscopic-process',
+  'market-exchange',
+  'archival-evidence',
+  'hazard-operation',
+  'consequence-world',
+]);
+const representationalCount = sceneFamilies.filter((family) => physicalFamilies.has(family)).length;
 const previousAttempts = Array.isArray(plan.v9?.providerAttempts) ? plan.v9.providerAttempts : [];
 const attempts = Array.isArray(result.attempts) ? result.attempts : [];
 plan.v9 = {
@@ -140,8 +203,14 @@ plan.v9 = {
   providerAttempts: [...previousAttempts, ...attempts],
   providerErrorCount: [...previousAttempts, ...attempts].filter((attempt) => !attempt.ok).length,
   aiArtDirectionRefinedSceneCount: refinedCount,
-  aiArtDirectionVersion: 2,
+  aiArtDirectionVersion: 3,
+  aiSceneFamilyLock: 'pre-request-and-post-merge-v1',
+  sceneFamilies,
+  familyCount: new Set(sceneFamilies).size,
+  mapSceneCount: sceneFamilies.filter((family) => family === 'geographic-route').length,
+  representationalCount,
+  representationalRatio: Number((representationalCount / Math.max(1, sceneFamilies.length)).toFixed(3)),
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
-console.log(`V9 AI art direction ready: provider=${result.provider}, model=${result.model || 'none'}, refined=${refinedCount}/${scenes.length}`);
+console.log(`V9 AI art direction ready: provider=${result.provider}, model=${result.model || 'none'}, refined=${refinedCount}/${scenes.length}, families=${sceneFamilies.join(' -> ')}`);
