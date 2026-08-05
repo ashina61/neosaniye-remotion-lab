@@ -1,0 +1,98 @@
+name: V9 One-Shot Visual Proof
+
+on:
+  push:
+    branches:
+      - agent/v9-semantic-visual-brain
+    paths:
+      - '.github/workflows/v9-one-shot-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v9-one-shot-proof
+  cancel-in-progress: true
+
+jobs:
+  prove-v9:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      V9_AI_PROVIDER: auto
+      V9_MAX_AI_IMAGES: '0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          npm install --no-audit --no-fund
+
+      - name: Local verification suite
+        run: npm run auto:v9:verify
+
+      - name: Build controlled Silk Road fixture
+        run: |
+          node scripts/auto-factory/create-v9-silk-road-fixture.mjs
+          ffmpeg -y -f lavfi -i anullsrc=r=48000:cl=stereo -t 46 \
+            -c:a pcm_s16le public/auto-factory/audio/final.wav
+
+      - name: Gemini semantic brain
+        run: npm run auto:v9:brain
+
+      - name: Semantic QC and exact proof
+        run: |
+          python3 scripts/auto-factory/qc-v9-semantic-blueprint.py
+          node scripts/auto-factory/assert-v9-silk-road-proof.mjs
+
+      - name: Typecheck production renderer
+        run: npm run typecheck
+
+      - name: Render ten semantic scene stills
+        run: |
+          mkdir -p out/review
+          python3 - <<'PY' > /tmp/v9-frames.txt
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('public/auto-factory/plan.json').read_text(encoding='utf-8'))
+          for scene in plan['scenes']:
+              frame = round((float(scene['start']) + float(scene['duration']) * 0.58) * int(plan['fps']))
+              print(f"{int(scene['id']):02d} {frame}")
+          PY
+          while read -r scene_id frame; do
+            npx remotion still src/auto-factory/index.ts NeoSaniyeAuto \
+              "out/review/scene-${scene_id}.png" --frame="$frame" --log=error
+          done < /tmp/v9-frames.txt
+
+      - name: Build contact sheet
+        run: |
+          ffmpeg -y -framerate 1 -i out/review/scene-%02d.png \
+            -vf "scale=216:384,tile=5x2" -frames:v 1 out/review/v9-silk-road-contact.jpg
+
+      - name: Upload visual proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9-one-shot-silk-road-proof
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            out/review/v9-silk-road-contact.jpg
+            out/review/scene-*.png
+            out/production-report.json
+            public/auto-factory/plan.json
