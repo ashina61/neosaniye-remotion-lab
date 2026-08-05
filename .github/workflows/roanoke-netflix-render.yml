@@ -1,6 +1,12 @@
 name: Roanoke Netflix Reel
 
 on:
+  pull_request:
+    paths:
+      - 'src/roanoke-netflix/**'
+      - 'scripts/generate-roanoke-netflix-voice.py'
+      - '.github/workflows/roanoke-netflix-render.yml'
+      - 'src/db-cooper/engine.tsx'
   workflow_dispatch:
     inputs:
       voice:
@@ -20,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      ROANOKE_VOICE: ${{ inputs.voice }}
-      ROANOKE_VOICE_RATE: ${{ inputs.voice_rate }}
+      ROANOKE_VOICE: ${{ inputs.voice || 'tr-TR-AhmetNeural' }}
+      ROANOKE_VOICE_RATE: ${{ inputs.voice_rate || '+5%' }}
       ROANOKE_VOICE_PITCH: -3Hz
 
     steps:
