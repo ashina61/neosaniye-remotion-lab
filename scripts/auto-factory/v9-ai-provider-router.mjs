@@ -1,7 +1,6 @@
 import process from 'node:process';
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.V9_AI_TIMEOUT_MS || 60_000);
-
 const clean = (value) => String(value ?? '').trim();
 
 const timeoutSignal = (milliseconds = DEFAULT_TIMEOUT_MS) => {
@@ -14,18 +13,28 @@ const stripCodeFence = (value) => clean(value)
   .replace(/^```(?:json)?\s*/i, '')
   .replace(/\s*```$/i, '');
 
+const normalizedJsonCandidates = (value) => {
+  const raw = stripCodeFence(value)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  const firstObject = raw.indexOf('{');
+  const lastObject = raw.lastIndexOf('}');
+  const sliced = firstObject >= 0 && lastObject > firstObject
+    ? raw.slice(firstObject, lastObject + 1)
+    : raw;
+  const withoutTrailingCommas = sliced.replace(/,\s*([}\]])/g, '$1');
+  return [...new Set([raw, sliced, withoutTrailingCommas])].filter(Boolean);
+};
+
 export const extractJson = (value) => {
-  const text = stripCodeFence(value);
-  try {
-    return JSON.parse(text);
-  } catch {
-    const firstObject = text.indexOf('{');
-    const lastObject = text.lastIndexOf('}');
-    if (firstObject >= 0 && lastObject > firstObject) {
-      return JSON.parse(text.slice(firstObject, lastObject + 1));
+  const failures = [];
+  for (const candidate of normalizedJsonCandidates(value)) {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      failures.push(clean(error?.message || error));
     }
-    throw new Error('AI provider did not return a JSON object.');
   }
+  throw new Error(`AI provider did not return valid JSON: ${failures.at(-1) || 'unknown parse error'}`);
 };
 
 const responseTextFromGemini = (payload) => {
@@ -59,16 +68,12 @@ const callGeminiModel = async ({model, prompt, systemInstruction}) => {
           'x-goog-api-key': apiKey,
         },
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [{text: systemInstruction}],
-          },
-          contents: [{
-            role: 'user',
-            parts: [{text: prompt}],
-          }],
+          systemInstruction: {parts: [{text: systemInstruction}]},
+          contents: [{role: 'user', parts: [{text: prompt}]}],
           generationConfig: {
             responseMimeType: 'application/json',
             maxOutputTokens: 32768,
+            temperature: 0.35,
           },
         }),
       },
@@ -77,11 +82,7 @@ const callGeminiModel = async ({model, prompt, systemInstruction}) => {
     if (!response.ok) {
       throw new Error(`Gemini ${model} HTTP ${response.status}: ${payload?.error?.message || response.statusText}`);
     }
-    return {
-      provider: 'gemini',
-      model,
-      text: responseTextFromGemini(payload),
-    };
+    return {provider: 'gemini', model, text: responseTextFromGemini(payload)};
   } finally {
     clear();
   }
@@ -90,15 +91,12 @@ const callGeminiModel = async ({model, prompt, systemInstruction}) => {
 const callGemini = async ({prompt, systemInstruction}) => {
   const apiKey = clean(process.env.GEMINI_API_KEY);
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.');
-
-  const configured = clean(process.env.V9_GEMINI_MODEL);
   const models = [...new Set([
-    configured,
+    clean(process.env.V9_GEMINI_MODEL),
     'gemini-3.5-flash-lite',
     'gemini-2.5-flash-lite',
   ].filter(Boolean))];
   const failures = [];
-
   for (const model of models) {
     try {
       return await callGeminiModel({model, prompt, systemInstruction});
@@ -106,7 +104,6 @@ const callGemini = async ({prompt, systemInstruction}) => {
       failures.push(`${model}: ${clean(error?.message || error)}`);
     }
   }
-
   throw new Error(`Gemini model attempts failed: ${failures.join(' | ')}`);
 };
 
@@ -129,27 +126,18 @@ const callCloudflare = async ({prompt, systemInstruction}) => {
       {
         method: 'POST',
         signal,
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [
-            {role: 'system', content: systemInstruction},
-            {role: 'user', content: prompt},
-          ],
-        }),
+        headers: {Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json'},
+        body: JSON.stringify({messages: [
+          {role: 'system', content: systemInstruction},
+          {role: 'user', content: prompt},
+        ]}),
       },
     );
     const payload = await response.json();
     if (!response.ok || payload?.success === false) {
       throw new Error(`Cloudflare ${response.status}: ${payload?.errors?.[0]?.message || response.statusText}`);
     }
-    return {
-      provider: 'cloudflare',
-      model,
-      text: responseTextFromCloudflare(payload),
-    };
+    return {provider: 'cloudflare', model, text: responseTextFromCloudflare(payload)};
   } finally {
     clear();
   }
@@ -164,10 +152,7 @@ const callPollinations = async ({prompt, systemInstruction}) => {
     const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
       method: 'POST',
       signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: {Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json'},
       body: JSON.stringify({
         model,
         messages: [
@@ -181,21 +166,13 @@ const callPollinations = async ({prompt, systemInstruction}) => {
     if (!response.ok) {
       throw new Error(`Pollinations ${response.status}: ${payload?.error?.message || response.statusText}`);
     }
-    return {
-      provider: 'pollinations',
-      model,
-      text: clean(payload?.choices?.[0]?.message?.content),
-    };
+    return {provider: 'pollinations', model, text: clean(payload?.choices?.[0]?.message?.content)};
   } finally {
     clear();
   }
 };
 
-const PROVIDERS = {
-  gemini: callGemini,
-  cloudflare: callCloudflare,
-  pollinations: callPollinations,
-};
+const PROVIDERS = {gemini: callGemini, cloudflare: callCloudflare, pollinations: callPollinations};
 
 export const providerAvailability = () => ({
   gemini: Boolean(clean(process.env.GEMINI_API_KEY)),
@@ -209,9 +186,7 @@ export const generateStructuredJson = async ({
   validate,
   provider = clean(process.env.V9_TEXT_PROVIDER || process.env.V9_AI_PROVIDER) || 'auto',
 }) => {
-  const order = provider === 'auto'
-    ? ['gemini', 'cloudflare', 'pollinations']
-    : [provider];
+  const order = provider === 'auto' ? ['gemini', 'cloudflare', 'pollinations'] : [provider];
   const attempts = [];
 
   for (const name of order) {
@@ -220,24 +195,38 @@ export const generateStructuredJson = async ({
       attempts.push({provider: name, ok: false, error: 'unsupported-provider'});
       continue;
     }
-    try {
-      const result = await implementation({prompt, systemInstruction});
-      const value = extractJson(result.text);
-      if (validate && !validate(value)) {
-        throw new Error('Provider JSON failed V9 schema validation.');
+
+    const providerPrompts = name === 'gemini'
+      ? [
+          {prompt, systemInstruction},
+          {
+            prompt: `Return the requested object as strict valid JSON. Do not use trailing commas, comments, markdown or omitted fields.\n\n${prompt}`,
+            systemInstruction: `${systemInstruction} This is a JSON repair retry. Produce strict parseable JSON only.`,
+          },
+        ]
+      : [{prompt, systemInstruction}];
+
+    for (const [retryIndex, request] of providerPrompts.entries()) {
+      try {
+        const result = await implementation(request);
+        const value = extractJson(result.text);
+        if (validate && !validate(value)) {
+          throw new Error('Provider JSON failed V9 schema validation.');
+        }
+        return {
+          value,
+          provider: result.provider,
+          model: result.model,
+          attempts: [...attempts, {provider: name, model: result.model, retry: retryIndex, ok: true}],
+        };
+      } catch (error) {
+        attempts.push({
+          provider: name,
+          retry: retryIndex,
+          ok: false,
+          error: clean(error?.message || error).slice(0, 800),
+        });
       }
-      return {
-        value,
-        provider: result.provider,
-        model: result.model,
-        attempts: [...attempts, {provider: name, model: result.model, ok: true}],
-      };
-    } catch (error) {
-      attempts.push({
-        provider: name,
-        ok: false,
-        error: clean(error?.message || error).slice(0, 800),
-      });
     }
   }
 
