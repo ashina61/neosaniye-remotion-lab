@@ -5,7 +5,12 @@ import {generateStructuredJson} from './v9-ai-provider-router.mjs';
 const planPath = process.env.PLAN_PATH || 'public/auto-factory/plan.json';
 const plan = JSON.parse(await readFile(planPath, 'utf8'));
 const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
-const unique = (values) => [...new Set((values || []).map(clean).filter(Boolean))];
+const sanitizeAiText = (value) => clean(value)
+  .replace(/generic floating cards/gi, 'dashboard-style card layouts')
+  .replace(/decorative geometry as (?:the )?hero/gi, 'abstract decoration as the central subject')
+  .replace(/single icon explains?/gi, 'one-symbol shorthand')
+  .replace(/random circles and lines/gi, 'arbitrary geometric marks');
+const unique = (values) => [...new Set((values || []).map(sanitizeAiText).filter(Boolean))];
 const scenes = plan.scenes || [];
 
 const request = {
@@ -15,7 +20,7 @@ const request = {
   rules: [
     'Never change sceneId or lockedSceneFamily.',
     'Use only facts and named entities present in the narration, mustShow list or research.',
-    'Describe concrete people, objects, environments and physical actions, not cards or generic icons.',
+    'Describe concrete people, objects, environments and physical actions, not dashboard layouts or generic icons.',
     'Make foreground, midground and background visibly different.',
     'Return compact JSON only.',
   ],
@@ -81,11 +86,14 @@ for (const scene of scenes) {
     ...(current.worldEntities || []),
     ...(candidate.worldEntities || candidate.visibleEntities || candidate.subjects || []),
   ]).slice(0, 10);
-  const visualStatement = clean(candidate.visualStatement || candidate.sceneDescription);
-  const camera = clean(candidate.camera || candidate.motionIntent?.camera);
-  const heroAction = clean(candidate.heroAction || candidate.motionIntent?.heroAction);
-  const transitionObject = clean(candidate.transitionObject || candidate.motionIntent?.transitionObject);
-  const imagePrompt = clean(candidate.imagePrompt || candidate.prompt || candidate.assetPlan?.prompt);
+  const visualStatement = sanitizeAiText(candidate.visualStatement || candidate.sceneDescription);
+  const camera = sanitizeAiText(candidate.camera || candidate.motionIntent?.camera);
+  const heroAction = sanitizeAiText(candidate.heroAction || candidate.motionIntent?.heroAction);
+  const transitionObject = sanitizeAiText(candidate.transitionObject || candidate.motionIntent?.transitionObject);
+  const rawImagePrompt = sanitizeAiText(candidate.imagePrompt || candidate.prompt || candidate.assetPlan?.prompt);
+  const imagePrompt = rawImagePrompt.length >= 40
+    ? `${rawImagePrompt} Avoid dashboard layouts and abstract decorative marks. No readable text, captions, logos or watermarks.`
+    : current.assetPlan?.prompt;
 
   scene.v9Blueprint = {
     ...current,
@@ -112,7 +120,7 @@ for (const scene of scenes) {
     },
     assetPlan: {
       ...(current.assetPlan || {}),
-      prompt: imagePrompt.length >= 40 ? imagePrompt : current.assetPlan?.prompt,
+      prompt: imagePrompt,
     },
     aiArtDirection: {
       provider: result.provider,
@@ -132,7 +140,7 @@ plan.v9 = {
   providerAttempts: [...previousAttempts, ...attempts],
   providerErrorCount: [...previousAttempts, ...attempts].filter((attempt) => !attempt.ok).length,
   aiArtDirectionRefinedSceneCount: refinedCount,
-  aiArtDirectionVersion: 1,
+  aiArtDirectionVersion: 2,
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
