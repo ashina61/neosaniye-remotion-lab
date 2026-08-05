@@ -27,6 +27,40 @@ physical_families = {
     "consequence-world",
 }
 
+ARCHETYPE_FAMILY = {
+    "route-overview": "geographic-route",
+    "caravan-journey": "human-reconstruction",
+    "oasis-relay-city": "human-reconstruction",
+    "maritime-air-logistics": "human-reconstruction",
+    "human-expertise-cluster": "human-reconstruction",
+    "human-world-establishing": "human-reconstruction",
+    "market-handoff": "market-exchange",
+    "terrain-constraint": "environmental-reconstruction",
+    "environment-establishing": "environmental-reconstruction",
+    "knowledge-transfer": "archival-evidence",
+    "state-control-conflict": "hazard-operation",
+    "damage-and-repair": "hazard-operation",
+    "treatment-failure": "hazard-operation",
+    "route-or-system-disruption": "hazard-operation",
+    "micro-population-variation": "microscopic-process",
+    "antibiotic-attack": "microscopic-process",
+    "resistant-survivors": "microscopic-process",
+    "survivor-reproduction": "microscopic-process",
+    "selection-shift": "microscopic-process",
+    "selection-pressure": "microscopic-process",
+    "gene-transfer-cutaway": "mechanism-cutaway",
+    "lithography-cutaway": "mechanism-cutaway",
+    "internal-mechanism-cutaway": "mechanism-cutaway",
+    "industrial-ecosystem": "industrial-process",
+    "fab-production": "industrial-process",
+    "capital-equipment-cycle": "industrial-process",
+    "global-dependency-network": "network-flow",
+    "host-environment-spread": "network-flow",
+    "capacity-comparison": "comparison-stage",
+    "causal-progression": "timeline-causality",
+    "system-consequence": "consequence-world",
+}
+
 
 def longest_run(values: list[str]) -> int:
     best = current = 0
@@ -60,9 +94,19 @@ def generic_shape_first(item: dict) -> bool:
     )
 
 
+semantic_rows = [
+    {
+        "scene": scene.get("id"),
+        "family": blueprint.get("sceneFamily"),
+        "archetype": blueprint.get("sceneArchetype"),
+        "expected_family": ARCHETYPE_FAMILY.get(str(blueprint.get("sceneArchetype", ""))),
+    }
+    for scene, blueprint in zip(scenes, blueprints)
+]
+
 route_rows: list[dict[str, object]] = []
 for scene, blueprint in zip(scenes, blueprints):
-    if blueprint.get("sceneFamily") != "geographic-route":
+    if blueprint.get("sceneArchetype") != "route-overview":
         continue
     statement = str(blueprint.get("visualStatement", "")).lower()
     relations = " ".join(map(str, blueprint.get("spatialRelations") or [])).lower()
@@ -71,6 +115,7 @@ for scene, blueprint in zip(scenes, blueprints):
     route_rows.append(
         {
             "scene": scene.get("id"),
+            "family": blueprint.get("sceneFamily"),
             "archetype": blueprint.get("sceneArchetype"),
             "has_directional_contract": any(
                 token in combined
@@ -103,13 +148,19 @@ checks = {
     ),
     "v9_scene_families_present": all(families),
     "v9_scene_archetypes_present": all(archetypes),
+    "v9_archetype_family_consistency": all(
+        row["expected_family"] is not None
+        and row["family"] == row["expected_family"]
+        for row in semantic_rows
+    ),
     "v9_scene_family_diversity": len(set(families)) >= min(4, len(scenes)),
     "v9_scene_archetype_diversity": len(set(archetypes)) >= min(6, len(scenes)),
     "v9_no_adjacent_archetype_repeat": longest_run(archetypes) <= 1,
     "v9_representational_ratio": physical_ratio >= 0.5,
     "v9_map_budget": map_count <= 2,
     "v9_route_contract_complete": all(
-        row["archetype"] == "route-overview"
+        row["family"] == "geographic-route"
+        and row["archetype"] == "route-overview"
         and row["has_directional_contract"]
         and int(row["entity_count"]) >= 2
         for row in route_rows
@@ -151,6 +202,7 @@ if REPORT_PATH.exists():
 report.setdefault("checks", {}).update(checks)
 report["v9_scene_families"] = families
 report["v9_scene_archetypes"] = archetypes
+report["v9_semantic_rows"] = semantic_rows
 report["v9_scene_family_counts"] = dict(family_counts)
 report["v9_scene_archetype_counts"] = dict(archetype_counts)
 report["v9_longest_archetype_run"] = longest_run(archetypes)
