@@ -22,13 +22,14 @@ const FAMILY_META = {
   'consequence-world': {physical: true, motion: 'pull-back-to-system-consequence', fallback: 'world-consequence-stage'},
 };
 
+// Only classify from the actual spoken claim and explicitly required visuals.
+// Generic planning helpers such as "topic evidence" must never select a scene family.
 const localText = (scene) => lower([
   scene.title,
   scene.voiceLine,
   scene.sceneGoal,
   scene.heroVisual,
   ...(scene.mustShow || []),
-  ...(scene.supportVisuals || []),
 ].join(' '));
 
 const classify = (scene, index, total) => {
@@ -36,17 +37,17 @@ const classify = (scene, index, total) => {
   if (index === total - 1) return 'consequence-world';
 
   if (/\b(market|bazaar|exchange|handoff|goods? changed hands?|bought|sold|stalls?|cargo transfer)\b/.test(text)) return 'market-exchange';
-  if (/\b(caravans?|camels?|merchant journey|travell?ers?|pilgrims?|workers?|engineers?|scientists?|soldiers?|operators?|scholars?)\b/.test(text)) return 'human-reconstruction';
+  if (/\b(caravans?|camels?|merchants?|merchant journey|travell?ers?|pilgrims?|workers?|engineers?|scientists?|soldiers?|operators?|scholars?)\b/.test(text)) return 'human-reconstruction';
   if (/\b(ships?|merchant vessels?|ports?|harbou?rs?|docks?|sea routes?|maritime|aircraft)\b/.test(text)) return 'human-reconstruction';
-  if (/\b(wars?|blocked|blockage|blockade|danger|threat|attack|damage|repair|protect|failure|break one link|tax checkpoint|fortified checkpoint|fought over|disruption|harder to treat)\b/.test(text)) return 'hazard-operation';
-  if (/\b(paper|manuscripts?|documents?|records?|archives?|evidence|reports?|decrees?|photographs?|religions?|stories|knowledge|ideas?|technologies)\b/.test(text)) return 'archival-evidence';
+  if (/\b(wars?|blocked|blockage|blockade|danger|threat|attack|damage|repair|protect\w*|failure|break one link|tax\w*|empires?|fortified checkpoint|fought over|disruption|harder to treat)\b/.test(text)) return 'hazard-operation';
+  if (/\b(paper|manuscripts?|documents?|records?|archives?|reports?|decrees?|photographs?|religions?|stories|knowledge)\b/.test(text)) return 'archival-evidence';
 
   const hasTerrain = /\b(mountains?|deserts?|terrain|water sources?|oasis landscape|forests?|ocean floor|habitats?|environmental constraints?)\b/.test(text);
   const hasGeographicFlow = /\b(routes?|roads?|corridors?|lanes?)\b.*\b(link|links|linked|linking|connect|connects|connected|connecting|from|between)\b|\b(link|links|linked|linking|connect|connects|connected|connecting)\b.*\b(east|west|asia|europe|continents?|countries|regions?|cities)\b|\bfrom\b.+\bto\b/.test(text);
   if (hasTerrain && !hasGeographicFlow) return 'environmental-reconstruction';
 
   if (/\b(factories|factory|fabs?|manufactur\w*|produc\w*|machines?|plants?|clean rooms?|assembly|lithography equipment)\b/.test(text)) return 'industrial-process';
-  if (/\b(lithograph\w*|circuit patterns?|transistors?|nanometers?|wafer layers?|inside|layers?|cores?|cutaway|components?|mechanisms?|signals?|fibers?|chips?|wafers?|membranes?|receptors?|gene transfer|genes move|dna exchange)\b/.test(text)) return 'mechanism-cutaway';
+  if (/\b(lithograph\w*|circuit patterns?|transistors?|nanometers?|wafer layers?|inside|layers?|cores?|cutaway|components?|mechanisms?|signals?|fibers?|chips?|wafers?|membranes?|receptors?|gene transfer|genes?\s+(?:can\s+also\s+)?move|dna exchange)\b/.test(text)) return 'mechanism-cutaway';
   if (/\b(bacter\w*|cells?|viruses?|microb\w*|mutat\w*|genes?|immune\w*|microscop\w*|colon\w*|selection pressure|resistance traits?)\b/.test(text)) return 'microscopic-process';
 
   if (hasGeographicFlow || /\b(across continents?|trade routes?|shipping lanes?|land routes?|origin|destination|intermediary hubs?|border crossings?)\b/.test(text)) return 'geographic-route';
@@ -86,7 +87,6 @@ for (const [index, scene] of scenes.entries()) {
   };
 }
 
-const families = scenes.map((scene) => scene.v9Blueprint.sceneFamily);
 let mapCount = 0;
 for (let index = 0; index < scenes.length - 1; index += 1) {
   const blueprint = scenes[index].v9Blueprint;
@@ -131,7 +131,7 @@ plan.v9 = {
   mapSceneCount: finalFamilies.filter((family) => family === 'geographic-route').length,
   representationalCount,
   representationalRatio: Number((representationalCount / Math.max(1, finalFamilies.length)).toFixed(3)),
-  semanticFamilyRepair: 'final-spoken-claim-v1',
+  semanticFamilyRepair: 'final-spoken-claim-v2',
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
