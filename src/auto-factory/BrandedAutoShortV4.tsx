@@ -12,14 +12,17 @@ import {UniversalSemanticAutoShortV6Safe} from './UniversalSemanticAutoShortV6Sa
 const scenes = ((planJson as unknown as {
   scenes?: Array<{
     semanticLockRule?: unknown;
-    v9Blueprint?: {sceneFamily?: unknown};
+    v9Blueprint?: {sceneFamily?: unknown; sceneArchetype?: unknown};
     visualContract?: {version?: unknown};
     motionContract?: {version?: unknown};
   }>;
 }).scenes ?? []);
 
 const useV9SemanticRenderer = scenes.length > 0 && scenes.every(
-  (scene) => typeof scene.v9Blueprint?.sceneFamily === 'string',
+  (scene) => (
+    typeof scene.v9Blueprint?.sceneFamily === 'string'
+    && typeof scene.v9Blueprint?.sceneArchetype === 'string'
+  ),
 );
 const useV8DirectorRenderer = scenes.length > 0 && scenes.every(
   (scene) => scene.visualContract?.version === 8 && scene.motionContract?.version === 8,
