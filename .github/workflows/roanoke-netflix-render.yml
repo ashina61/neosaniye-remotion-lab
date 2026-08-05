@@ -1,0 +1,83 @@
+name: Roanoke Netflix Reel
+
+on:
+  workflow_dispatch:
+    inputs:
+      voice:
+        description: Turkish Edge TTS voice
+        required: false
+        default: tr-TR-AhmetNeural
+      voice_rate:
+        description: Voice rate
+        required: false
+        default: +5%
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ROANOKE_VOICE: ${{ inputs.voice }}
+      ROANOKE_VOICE_RATE: ${{ inputs.voice_rate }}
+      ROANOKE_VOICE_PITCH: -3Hz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system audio tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Install voice dependency
+        run: python -m pip install --upgrade edge-tts
+
+      - name: Generate narration and ambience
+        run: python scripts/generate-roanoke-netflix-voice.py
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Render vertical reel
+        run: >-
+          npx remotion render
+          src/roanoke-netflix/index.ts
+          RoanokeNetflix
+          out/roanoke-netflix-reel.mp4
+          --codec=h264
+          --crf=14
+          --audio-bitrate=192k
+          --pixel-format=yuv420p
+          --concurrency=2
+
+      - name: Upload rendered MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: roanoke-netflix-reel
+          path: out/roanoke-netflix-reel.mp4
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload voice manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: roanoke-voice-manifest
+          path: public/roanoke-netflix/audio/voice-manifest.json
+          if-no-files-found: error
+          retention-days: 14
