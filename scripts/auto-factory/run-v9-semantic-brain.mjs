@@ -1,6 +1,7 @@
 import process from 'node:process';
 
 const originalProvider = process.env.V9_AI_PROVIDER;
+const originalTimeout = process.env.V9_AI_TIMEOUT_MS;
 
 const run = async (name) => {
   const url = new URL(`./${name}`, import.meta.url);
@@ -20,12 +21,18 @@ try {
 
   // AI may enrich only mise-en-scene, layers, camera and image prompt.
   process.env.V9_AI_PROVIDER = originalProvider || 'auto';
+  process.env.V9_AI_TIMEOUT_MS = originalTimeout || '20000';
   await run('refine-v9-blueprints-with-ai.mjs');
 } finally {
   if (originalProvider === undefined) {
     delete process.env.V9_AI_PROVIDER;
   } else {
     process.env.V9_AI_PROVIDER = originalProvider;
+  }
+  if (originalTimeout === undefined) {
+    delete process.env.V9_AI_TIMEOUT_MS;
+  } else {
+    process.env.V9_AI_TIMEOUT_MS = originalTimeout;
   }
 }
 
