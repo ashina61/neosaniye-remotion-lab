@@ -38,197 +38,145 @@ Priority order:
 2. Pollinations image generation
 3. V9 representational Remotion fallback
 
-The default AI-image budget is four scenes per video. AI images are reserved for hero scenes that benefit most from representational detail. Maps, timelines and simple network explanations should remain deterministic unless a generated asset provides clear value.
+Image generation is budgeted instead of being called for every scene:
 
-## V9 scene families
+- `procedural`: 0 AI images
+- `hybrid`: up to 3 AI images
+- `ai-heavy`: up to 6 AI images
 
-The first implementation contains these semantic families:
+The planning brain selects the most representational scenes. Maps, timelines and network diagrams normally remain deterministic and editable.
 
-- `geographic-route`
-- `human-reconstruction`
-- `environmental-reconstruction`
-- `industrial-process`
-- `mechanism-cutaway`
-- `microscopic-process`
-- `market-exchange`
-- `network-flow`
-- `archival-evidence`
-- `hazard-operation`
-- `comparison-stage`
-- `timeline-causality`
-- `consequence-world`
+## Implemented V9 foundation
 
-A scene family is not a color theme. It defines:
+### Semantic blueprint brain
 
-- what physically exists in the shot,
-- foreground, midground and background,
-- which spatial relationship communicates the claim,
-- which asset type has priority,
-- which camera and motion grammar applies,
-- which shortcuts are forbidden.
+Each final spoken claim receives a `scene.v9Blueprint` containing:
 
-## Example: route topics
+- scene family,
+- visible world entities,
+- foreground / midground / background layers,
+- spatial relationships,
+- semantic camera and motion intent,
+- image prompt and fallback renderer,
+- negative rules that reject generic cards, icons and decorative geometry.
 
-A route scene cannot be “a line on a vague map.”
+### Scene family taxonomy
 
-It must specify:
+The first renderer slice supports:
 
-- origin,
-- destination,
-- intermediary nodes,
-- direction,
-- terrain or geographic constraints,
-- the thing moving through the route,
-- the relationship to the adjacent physical scene.
+1. `geographic-route`
+2. `human-reconstruction`
+3. `environmental-reconstruction`
+4. `industrial-process`
+5. `mechanism-cutaway`
+6. `microscopic-process`
+7. `market-exchange`
+8. `network-flow`
+9. `archival-evidence`
+10. `hazard-operation`
+11. `comparison-stage`
+12. `timeline-causality`
+13. `consequence-world`
 
-The route-map budget is two scenes per normal short. Extra route scenes are automatically converted into human, environmental, exchange or archival scenes.
+### Semantic representational renderer
 
-## Semantic blueprint contract
+`src/auto-factory/SemanticVisualAutoShortV9.tsx` consumes the blueprint directly.
 
-Every scene receives `scene.v9Blueprint`:
+It includes:
 
-```json
-{
-  "sceneId": 1,
-  "sceneFamily": "human-reconstruction",
-  "visualStatement": "The exact claim made visible as a concrete scene",
-  "worldEntities": ["named subject", "physical prop", "location"],
-  "spatialRelations": [
-    "foreground relationship",
-    "midground action",
-    "background context"
-  ],
-  "layerPlan": {
-    "foreground": [],
-    "midground": [],
-    "background": []
-  },
-  "motionIntent": {
-    "camera": "push-in",
-    "grammar": "parallax-push-with-action-reveal",
-    "heroAction": "narration-driven action",
-    "transitionLogic": "semantic carry into next scene"
-  },
-  "assetPlan": {
-    "aiImageRecommended": true,
-    "aiImagePriority": 5,
-    "prompt": "topic-specific 9:16 illustration prompt",
-    "fallbackRenderer": "layered-human-silhouette-scene",
-    "searchQueries": []
-  },
-  "negativeRules": []
-}
-```
+- directional route tracing with origins, hubs, destinations, terrain and moving cargo,
+- a Silk Road preset using China, Central Asia, Samarkand, Persia and Europe,
+- caravan and human action reconstruction,
+- physical market handoffs,
+- industrial machinery and chip-fab variants,
+- mechanism cutaways and signal travel,
+- microscopic selection and resistance variants,
+- archive, hazard, comparison, timeline and real-world consequence stages,
+- AI image camera motion when a V9 asset exists,
+- deterministic representational fallback when no image provider is configured.
 
-## Pipeline
+The V9 renderer is selected only when every scene has a valid V9 blueprint. Older plans continue to use V8 or earlier renderers.
 
-### Phase 1 — Semantic blueprint
+## Production pipeline order
 
-`build-semantic-visual-blueprint-v9.mjs`
+The production workflow must follow this order:
 
-- reads V8 plan and contracts,
-- infers topic domain,
-- creates deterministic blueprints,
-- optionally asks the AI provider router to refine them,
-- enforces scene-family diversity,
-- limits map scenes,
-- breaks repeated family runs,
-- enforces at least 50% representational scenes,
-- rewrites scene image prompts.
+1. research and base plan,
+2. V8 story and timing foundation,
+3. first V9 semantic blueprint,
+4. final continuous narration,
+5. rebuild V9 blueprint from the exact spoken claims,
+6. generate budgeted V9 assets once,
+7. typecheck,
+8. render,
+9. create midpoint contact sheet,
+10. run legacy safety checks plus V9 semantic QC.
 
-### Phase 2 — AI asset budget
+This order prevents image quota from being spent on narration that later changes.
 
-`generate-v9-ai-assets.mjs`
+## Quality gates
 
-- selects only the highest-priority representational scenes,
-- generates at most `V9_MAX_AI_IMAGES`,
-- writes a provider manifest,
-- updates `scene.asset`,
-- preserves fallback rendering when credentials or quota are unavailable.
+V9 blueprint QC requires:
 
-### Phase 3 — V9 representational renderer
-
-Next implementation slice:
-
-- dedicated route geography renderer,
-- physical caravan and historical human stage,
-- market handoff stage,
-- industrial fab and machinery stage,
-- environmental reconstruction stage,
-- microscopic ecosystem stage,
-- archive desk and evidence wall stage,
-- hazard / repair operation stage,
-- generated-image parallax compositor.
-
-The renderer must consume `v9Blueprint`, not infer meaning again from titles.
-
-### Phase 4 — Motion grammar V9
-
-Next implementation slice:
-
-- entity paths derived from spatial relations,
-- foreground / midground / background parallax,
-- route-follow camera,
-- handoff match cuts,
-- process build,
-- shell-open cutaway,
-- threat approach and repair response,
-- semantic object carry between scenes.
-
-### Phase 5 — QC
-
-`qc-v9-semantic-blueprint.py` initially checks:
-
-- complete V9 metadata,
-- one blueprint per scene,
+- every scene has a blueprint,
 - at least four scene families,
-- no three-scene family run,
 - at least 50% representational scenes,
-- maximum two route maps,
-- complete route contracts,
-- complete three-layer spatial plans,
-- motion intent and fallback asset plans,
-- anti-shape rules.
+- no more than two map scenes,
+- no three-scene run from the same family,
+- every scene has world entities and three depth layers,
+- every route scene has origin, destination, intermediary structure and direction,
+- every prompt bans generic infographic cards and decorative geometry.
 
-Later visual QC must inspect contact sheets for:
+Renderer promotion additionally requires a real contact sheet. Passing JSON alone is not enough.
 
-- representational subject coverage,
-- named geography coverage,
-- foreground/background diversity,
-- generated asset relevance,
-- hero silhouette repetition,
-- visual continuity between narration and scene.
+## Controlled visual proof
 
-## Environment variables
+The dedicated `V9 Semantic Visual Brain` workflow builds a fixed ten-scene Silk Road fixture, calls Gemini when the repository secret is available, renders a midpoint still from every scene and uploads:
 
-```text
-V9_TEXT_PROVIDER=auto
-GEMINI_API_KEY=
-V9_GEMINI_MODEL=gemini-3.5-flash-lite
+- ten full-size scene stills,
+- one 5×2 contact sheet,
+- the final Gemini-refined plan.
 
-CLOUDFLARE_ACCOUNT_ID=
-CLOUDFLARE_API_TOKEN=
-V9_CLOUDFLARE_TEXT_MODEL=@cf/zai-org/glm-4.7-flash
-V9_CLOUDFLARE_IMAGE_MODEL=@cf/black-forest-labs/flux-1-schnell
+The proof is accepted only if the contact sheet visibly contains route, caravan, city/hub, physical exchange, terrain, archive/ideas, political control, sea logistics, risk and consequence scenes rather than the same card or diagram repeated ten times.
 
-POLLINATIONS_API_KEY=
-V9_POLLINATIONS_TEXT_MODEL=gemini
-V9_POLLINATIONS_IMAGE_MODEL=zimage
+## Next milestones
 
-V9_IMAGE_PROVIDER=auto
-V9_MAX_AI_IMAGES=4
-V9_IMAGE_STEPS=6
-V9_AI_TIMEOUT_MS=45000
-```
+### Milestone 1 — validate the first contact sheet
 
-## Definition of done
+- fix TypeScript or runtime errors,
+- inspect all ten Silk Road frames,
+- confirm Gemini provider metadata,
+- reject visually repetitive stages before merge.
 
-V9 is ready for production only when all of these hold:
+### Milestone 2 — provider-backed image layers
 
-- Silk Road produces route geography, caravan, exchange, city relay, political risk and consequence scenes.
-- Antibiotic resistance produces microscopic population, antibiotic attack, survivor selection, gene transfer, spread and clinical consequence scenes.
-- Taiwan chips produces physical fab, lithography cutaway, workforce ecosystem, global logistics, concentration risk and alternative-capacity scenes.
-- No tested topic is rendered mainly as circles, cards and generic lines.
-- A missing AI key degrades quality but does not break the workflow.
-- AI quota exhaustion falls back per scene, not per video.
-- A contact sheet is reviewed before V9 replaces the current renderer in `main`.
+- add Cloudflare credentials,
+- generate only the three highest-priority physical scenes in hybrid mode,
+- add depth masks or foreground overlays so generated images are not simple zooming slides,
+- track provider, model, prompt and seed in the artifact manifest.
+
+### Milestone 3 — domain depth packs
+
+- history: architecture, costume, transport, documents, terrain,
+- science: cell structures, molecules, laboratory environments, scale,
+- technology: factories, machines, components, infrastructure,
+- geopolitics: accurate route presets, ports, borders, chokepoints,
+- nature: species anatomy, habitats and ecological relationships.
+
+### Milestone 4 — contact-sheet intelligence
+
+- compare semantic scene families against rendered frames,
+- detect visually empty or icon-only stages,
+- detect repeated silhouettes and compositions,
+- reject a video whose contact sheet does not cover the planned physical actions.
+
+## Promotion rule
+
+Do not merge V9 into `main` merely because scripts and QC pass.
+
+Merge only after:
+
+1. the controlled Silk Road contact sheet is materially better than V8,
+2. at least one science fixture and one technology fixture render with different physical scene grammars,
+3. no existing V8 fallback or audio workflow regresses,
+4. the production workflow completes from topic selection through downloadable artifact.
