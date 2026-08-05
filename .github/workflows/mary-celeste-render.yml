@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/mary-celeste/**'
       - 'assets-b64/mary-celeste/**'
+      - 'public/db-cooper/textures/**'
       - 'scripts/generate-mary-celeste-audio.py'
       - '.github/workflows/mary-celeste-render.yml'
   workflow_dispatch:
