@@ -82,6 +82,9 @@ jobs:
           refined = int(v9.get('aiArtDirectionRefinedSceneCount') or 0)
           expected = {
               1: 'geographic-route',
+              2: 'human-reconstruction',
+              3: 'human-reconstruction',
+              4: 'market-exchange',
               5: 'environmental-reconstruction',
               6: 'archival-evidence',
               7: 'hazard-operation',
@@ -130,9 +133,11 @@ jobs:
             -vf "scale=216:384,tile=5x2" -frames:v 1 out/review/v9-silk-road-contact.jpg
 
       - name: Upload V9 visual proof
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: v9-silk-road-semantic-proof
+          if-no-files-found: warn
           path: |
             out/review/v9-silk-road-contact.jpg
             out/review/scene-*.png
