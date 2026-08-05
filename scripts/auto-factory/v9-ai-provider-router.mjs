@@ -1,6 +1,6 @@
 import process from 'node:process';
 
-const DEFAULT_TIMEOUT_MS = Number(process.env.V9_AI_TIMEOUT_MS || 45_000);
+const DEFAULT_TIMEOUT_MS = Number(process.env.V9_AI_TIMEOUT_MS || 60_000);
 
 const clean = (value) => String(value ?? '').trim();
 
@@ -29,51 +29,53 @@ export const extractJson = (value) => {
 };
 
 const responseTextFromGemini = (payload) => {
-  if (typeof payload?.output_text === 'string') return payload.output_text;
-  if (typeof payload?.outputText === 'string') return payload.outputText;
-  const outputs = payload?.outputs || payload?.output || [];
-  const parts = [];
-  const visit = (node) => {
-    if (!node) return;
-    if (typeof node === 'string') {
-      parts.push(node);
-      return;
-    }
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    if (typeof node === 'object') {
-      if (typeof node.text === 'string') parts.push(node.text);
-      Object.values(node).forEach(visit);
-    }
-  };
-  visit(outputs);
-  return parts.join('\n').trim();
+  const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+  const parts = candidates.flatMap((candidate) => candidate?.content?.parts || []);
+  const text = parts
+    .map((part) => typeof part?.text === 'string' ? part.text : '')
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+  if (text) return text;
+  if (typeof payload?.text === 'string') return payload.text;
+  throw new Error(
+    payload?.promptFeedback?.blockReason
+      ? `Gemini blocked the request: ${payload.promptFeedback.blockReason}`
+      : 'Gemini response contained no text candidate.',
+  );
 };
 
-const callGemini = async ({prompt, systemInstruction}) => {
+const callGeminiModel = async ({model, prompt, systemInstruction}) => {
   const apiKey = clean(process.env.GEMINI_API_KEY);
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.');
-  const model = clean(process.env.V9_GEMINI_MODEL) || 'gemini-3.5-flash-lite';
   const {signal, clear} = timeoutSignal();
   try {
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-      method: 'POST',
-      signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{text: systemInstruction}],
+          },
+          contents: [{
+            role: 'user',
+            parts: [{text: prompt}],
+          }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            maxOutputTokens: 32768,
+          },
+        }),
       },
-      body: JSON.stringify({
-        model,
-        input: {parts: [{text: prompt}]},
-        system_instruction: systemInstruction,
-      }),
-    });
-    const payload = await response.json();
+    );
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(`Gemini ${response.status}: ${payload?.error?.message || response.statusText}`);
+      throw new Error(`Gemini ${model} HTTP ${response.status}: ${payload?.error?.message || response.statusText}`);
     }
     return {
       provider: 'gemini',
@@ -83,6 +85,29 @@ const callGemini = async ({prompt, systemInstruction}) => {
   } finally {
     clear();
   }
+};
+
+const callGemini = async ({prompt, systemInstruction}) => {
+  const apiKey = clean(process.env.GEMINI_API_KEY);
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.');
+
+  const configured = clean(process.env.V9_GEMINI_MODEL);
+  const models = [...new Set([
+    configured,
+    'gemini-3.5-flash-lite',
+    'gemini-2.5-flash-lite',
+  ].filter(Boolean))];
+  const failures = [];
+
+  for (const model of models) {
+    try {
+      return await callGeminiModel({model, prompt, systemInstruction});
+    } catch (error) {
+      failures.push(`${model}: ${clean(error?.message || error)}`);
+    }
+  }
+
+  throw new Error(`Gemini model attempts failed: ${failures.join(' | ')}`);
 };
 
 const responseTextFromCloudflare = (payload) => clean(
@@ -182,7 +207,7 @@ export const generateStructuredJson = async ({
   prompt,
   systemInstruction,
   validate,
-  provider = clean(process.env.V9_TEXT_PROVIDER) || 'auto',
+  provider = clean(process.env.V9_TEXT_PROVIDER || process.env.V9_AI_PROVIDER) || 'auto',
 }) => {
   const order = provider === 'auto'
     ? ['gemini', 'cloudflare', 'pollinations']
@@ -205,13 +230,13 @@ export const generateStructuredJson = async ({
         value,
         provider: result.provider,
         model: result.model,
-        attempts: [...attempts, {provider: name, ok: true}],
+        attempts: [...attempts, {provider: name, model: result.model, ok: true}],
       };
     } catch (error) {
       attempts.push({
         provider: name,
         ok: false,
-        error: clean(error?.message || error).slice(0, 240),
+        error: clean(error?.message || error).slice(0, 800),
       });
     }
   }
