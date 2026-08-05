@@ -116,7 +116,7 @@ try {
     assert.equal(built.v9.version, 9);
     assert.equal(built.v9.brainProvider, 'deterministic');
     assert.equal(built.v9.renderer, 'semantic-visual-documentary-v9');
-    assert.equal(built.v9.semanticFamilyRepair, 'final-spoken-claim-v1');
+    assert.equal(built.v9.semanticFamilyRepair, 'final-spoken-claim-v2');
     assert.equal(built.scenes.length, 10);
     assert.ok(
       new Set(built.scenes.map((scene) => scene.v9Blueprint.sceneFamily)).size >= 4,
