@@ -5,8 +5,8 @@ import {AutoShortV4} from './AutoShortV4';
 import {AdaptiveDocumentaryAutoShortV7} from './AdaptiveDocumentaryAutoShortV7';
 import {BrandWatermark} from './BrandWatermark';
 import {RepresentationalAutoShortV8} from './RepresentationalAutoShortV8';
+import {RepresentationalAutoShortV9} from './RepresentationalAutoShortV9';
 import {SemanticAutoShortV5} from './SemanticAutoShortV5';
-import {SemanticVisualAutoShortV9} from './SemanticVisualAutoShortV9';
 import {UniversalSemanticAutoShortV6Safe} from './UniversalSemanticAutoShortV6Safe';
 
 const scenes = ((planJson as unknown as {
@@ -37,7 +37,7 @@ const useUniversalRenderer = scenes.length > 0 && scenes.every(
 export const BrandedAutoShortV4: React.FC = () => (
   <AbsoluteFill>
     {useV9SemanticRenderer ? (
-      <SemanticVisualAutoShortV9 />
+      <RepresentationalAutoShortV9 />
     ) : useV8DirectorRenderer ? (
       <RepresentationalAutoShortV8 />
     ) : useAdaptiveRenderer ? (
