@@ -112,8 +112,10 @@ const classify = (scene, index, total) => {
   const hasGeographicFlow = /\b(routes?|roads?|corridors?|lanes?)\b.*\b(link|links|linked|linking|connect|connects|connected|connecting|from|between)\b|\b(link|links|linked|linking|connect|connects|connected|connecting)\b.*\b(east|west|asia|europe|continents?|countries|regions?|cities)\b|\bfrom\b.+\bto\b/.test(text);
   if (hasTerrain && !hasGeographicFlow) return 'environmental-reconstruction';
 
+  // A production floor is industrial; the microscopic structure it creates is a cutaway.
+  if (/\b(lithography machines?.*(?:circuit|pattern)|microscopic circuit patterns?|circuit patterns?|transistors?|nanometers?|wafer layers?)\b/.test(text)) return 'mechanism-cutaway';
   if (/\b(factories|factory|fabs?|manufactur\w*|produc\w*|machines?|plants?|clean rooms?|assembly|lithography equipment)\b/.test(text)) return 'industrial-process';
-  if (/\b(lithograph\w*|circuit patterns?|transistors?|nanometers?|wafer layers?|inside|layers?|cores?|cutaway|components?|mechanisms?|signals?|fibers?|chips?|wafers?|membranes?|receptors?|gene transfer|genes?\s+(?:can\s+also\s+)?move|dna exchange)\b/.test(text)) return 'mechanism-cutaway';
+  if (/\b(inside|layers?|cores?|cutaway|components?|mechanisms?|signals?|fibers?|membranes?|receptors?|gene transfer|genes?\s+(?:can\s+also\s+)?move|dna exchange)\b/.test(text)) return 'mechanism-cutaway';
   if (/\b(bacter\w*|cells?|viruses?|microb\w*|mutat\w*|genes?|immune\w*|microscop\w*|colon\w*|selection pressure|resistance traits?)\b/.test(text)) return 'microscopic-process';
 
   if (hasGeographicFlow || /\b(across continents?|trade routes?|shipping lanes?|land routes?|origin|destination|intermediary hubs?|border crossings?)\b/.test(text)) return 'geographic-route';
@@ -251,7 +253,7 @@ plan.v9 = {
   mapSceneCount: finalFamilies.filter((family) => family === 'geographic-route').length,
   representationalCount,
   representationalRatio: Number((representationalCount / Math.max(1, finalFamilies.length)).toFixed(3)),
-  semanticFamilyRepair: 'final-spoken-claim-v3',
+  semanticFamilyRepair: 'final-spoken-claim-v4',
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
