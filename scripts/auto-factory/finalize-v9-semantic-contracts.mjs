@@ -34,8 +34,6 @@ const classify = (scene, index, total) => {
 
   // The spoken action wins. Supporting props may enrich, but must not hijack the family.
   if (/\b(paper|manuscripts?|documents?|records?|archives?|reports?|decrees?|photographs?|religions?|stories|knowledge|ideas?|scientific knowledge)\b/.test(speech)) return 'archival-evidence';
-  if (/\b(mountains?|deserts?|terrain|water sources?|oases?|oasis|passes?|forests?|ocean floor|habitats?|environmental constraints?)\b/.test(speech)
-      && !/\b(routes?|roads?|corridors?|lanes?)\b.*\b(link|connect|from|between)\b/.test(speech)) return 'environmental-reconstruction';
   if (/\b(wars?|blocked|blockage|blockade|danger|threat|attack|damage|repair|protect\w*|failure|break one link|tax\w*|empires?|fought|disruption|harder to treat)\b/.test(speech)) return 'hazard-operation';
   if (/\b(market|bazaar|exchange|handoff|goods? changed hands?|bought|sold|stalls?|cargo transfer)\b/.test(speech)) return 'market-exchange';
 
@@ -44,14 +42,19 @@ const classify = (scene, index, total) => {
   if (/\b(inside|layers?|cores?|cutaway|components?|mechanisms?|signals?|fibers?|membranes?|receptors?|gene transfer|genes?\s+(?:can\s+also\s+)?move|dna exchange)\b/.test(speech)) return 'mechanism-cutaway';
   if (/\b(bacter\w*|cells?|viruses?|microb\w*|mutat\w*|genes?|immune\w*|microscop\w*|colon\w*|selection pressure|resistance traits?)\b/.test(speech)) return 'microscopic-process';
 
+  // Concrete actors, vehicles and places outrank words such as route, network or terrain.
+  if (/\b(ships?|merchant vessels?|ports?|harbou?rs?|docks?|sea routes?|maritime|aircraft)\b/.test(text)) return 'human-reconstruction';
+  if (/\b(caravans?|camels?|merchants?|merchant journey|travell?ers?|pilgrims?|workers?|engineers?|scientists?|soldiers?|operators?|scholars?)\b/.test(text)) return 'human-reconstruction';
+  if (/\b(oasis cities?|city gates?|relay hubs?|samarkand|cities became|city became|trading cities?)\b/.test(text)) return 'human-reconstruction';
+
   const geographic = /\b(routes?|roads?|corridors?|lanes?)\b.*\b(link|links|linked|linking|connect|connects|connected|connecting|from|between)\b|\b(link|links|linked|linking|connect|connects|connected|connecting)\b.*\b(east|west|asia|europe|continents?|countries|regions?|cities)\b|\bfrom\b.+\bto\b|\bacross continents?\b/.test(speech);
+  const terrain = /\b(mountains?|deserts?|terrain|water sources?|oases?|oasis|passes?|forests?|ocean floor|habitats?|environmental constraints?)\b/.test(speech);
+  if (terrain && !geographic) return 'environmental-reconstruction';
   if (geographic) return 'geographic-route';
+
   if (/\b(spread between|spreads? between|propagat\w*|global.*depend|depend\w*.*global|supply chains?|distributed networks?|bottlenecks?|flow through the system|larger share of the colony)\b/.test(speech)) return 'network-flow';
   if (/\b(compare|versus|before|after|more than|less than|difference|two sides|alternative production|alternative capacity)\b/.test(speech)) return 'comparison-stage';
   if (/\b(first|then|later|eventually|centuries?|years?|timeline|led to|caused|generation after generation)\b/.test(speech)) return 'timeline-causality';
-
-  if (/\b(ships?|merchant vessels?|ports?|harbou?rs?|docks?|sea routes?|maritime|aircraft)\b/.test(text)) return 'human-reconstruction';
-  if (/\b(caravans?|camels?|merchants?|travell?ers?|pilgrims?|workers?|engineers?|scientists?|soldiers?|operators?|scholars?|city gate|relay hub)\b/.test(text)) return 'human-reconstruction';
 
   return index === 0 ? 'environmental-reconstruction' : ['human-reconstruction', 'environmental-reconstruction', 'archival-evidence'][index % 3];
 };
@@ -151,7 +154,7 @@ plan.v9 = {
   mapSceneCount: families.filter((family) => family === 'geographic-route').length,
   representationalCount,
   representationalRatio: Number((representationalCount / Math.max(1, families.length)).toFixed(3)),
-  semanticContractFinalizer: 'spoken-claim-priority-v1',
+  semanticContractFinalizer: 'spoken-claim-priority-v2',
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
