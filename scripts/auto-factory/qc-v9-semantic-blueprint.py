@@ -82,13 +82,15 @@ physical_count = sum(1 for family in families if family in physical_families)
 physical_ratio = physical_count / max(1, len(scenes))
 family_counts = Counter(families)
 map_count = family_counts.get("geographic-route", 0)
+brain_provider = v9.get("brainProvider") or v9.get("aiProvider")
+brain_model = v9.get("brainModel") or v9.get("aiModel")
 
 checks = {
     "v9_metadata": (
         v9.get("version") == 9
-        and v9.get("planner") == "semantic-visual-brain-v9"
-        and v9.get("representationalFirst") is True
-        and v9.get("shapeFirst") is False
+        and v9.get("renderer") == "semantic-visual-documentary-v9"
+        and v9.get("brain") == "semantic-visual-blueprint-v9"
+        and v9.get("semanticBlueprintReady") is True
     ),
     "v9_blueprints_complete": bool(scenes) and all(blueprints),
     "v9_scene_ids_locked": all(
@@ -140,16 +142,17 @@ report["v9_representational_scene_count"] = physical_count
 report["v9_representational_ratio"] = round(physical_ratio, 3)
 report["v9_map_scene_count"] = map_count
 report["v9_route_rows"] = route_rows
-report["v9_ai_provider"] = v9.get("aiProvider")
-report["v9_ai_model"] = v9.get("aiModel")
+report["v9_brain_provider"] = brain_provider
+report["v9_brain_model"] = brain_model
 report["v9_asset_provider"] = v9.get("assetProvider")
+report["v9_generated_ai_image_count"] = v9.get("generatedAiImageCount", 0)
 report["status"] = "PASS" if all(report["checks"].values()) else "FAIL"
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
 summary = {
     "v9_semantic_blueprint_status": "PASS" if all(checks.values()) else "FAIL",
-    "ai_provider": v9.get("aiProvider"),
+    "brain_provider": brain_provider,
     "asset_provider": v9.get("assetProvider"),
     "family_counts": dict(family_counts),
     "representational_ratio": round(physical_ratio, 3),
