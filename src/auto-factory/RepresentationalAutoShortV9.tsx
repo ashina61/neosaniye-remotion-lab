@@ -1,11 +1,11 @@
 import React from 'react';
 import {AbsoluteFill} from 'remotion';
 import {SemanticVisualAutoShortV9} from './SemanticVisualAutoShortV9';
-import {V9SemanticRepresentationalOverlay} from './V9SemanticRepresentationalOverlay';
+import {V9ArchetypeOverlay} from './V9ArchetypeOverlay';
 
 export const RepresentationalAutoShortV9: React.FC = () => (
   <AbsoluteFill>
     <SemanticVisualAutoShortV9 />
-    <V9SemanticRepresentationalOverlay />
+    <V9ArchetypeOverlay />
   </AbsoluteFill>
 );
