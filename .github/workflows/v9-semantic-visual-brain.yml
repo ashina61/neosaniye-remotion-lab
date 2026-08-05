@@ -51,7 +51,9 @@ jobs:
           node --check scripts/auto-factory/build-semantic-visual-blueprint-v9.mjs
           node --check scripts/auto-factory/repair-v9-semantic-families.mjs
           node --check scripts/auto-factory/finalize-v9-semantic-contracts.mjs
+          node --check scripts/auto-factory/lock-v9-spoken-families.mjs
           node --check scripts/auto-factory/refine-v9-blueprints-with-ai.mjs
+          node --check scripts/auto-factory/run-v9-semantic-brain.mjs
           node --check scripts/auto-factory/generate-v9-ai-assets.mjs
           node --check scripts/auto-factory/test-v9-semantic-visual-brain.mjs
           node --check scripts/auto-factory/create-v9-silk-road-fixture.mjs
@@ -66,7 +68,7 @@ jobs:
 
       - name: Run Gemini semantic art direction
         run: |
-          npm run auto:v9:brain
+          node scripts/auto-factory/run-v9-semantic-brain.mjs
           python3 scripts/auto-factory/qc-v9-semantic-blueprint.py
           python3 - <<'PY'
           import json
@@ -100,6 +102,7 @@ jobs:
           print('V9_FAMILIES=' + ','.join(map(str, families)))
           print('V9_REPRESENTATIONAL_RATIO=' + str(v9.get('representationalRatio')))
           print('V9_MAP_SCENES=' + str(v9.get('mapSceneCount')))
+          print('V9_SPOKEN_LOCK=' + str(v9.get('spokenFamilyLock')))
 
           if os.getenv('GEMINI_API_KEY'):
               assert provider == 'gemini', f'Gemini secret exists but final provider is {provider}'
