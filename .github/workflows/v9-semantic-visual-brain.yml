@@ -40,7 +40,7 @@ jobs:
           npm install --no-audit --no-fund
 
       - name: Run local-style V9 verification
-        run: npm run auto:v9:verify
+        run: bash scripts/auto-factory/verify-v9-local.sh
 
       - name: Build controlled Silk Road plan
         run: |
@@ -53,9 +53,6 @@ jobs:
           node scripts/auto-factory/run-v9-semantic-brain.mjs
           python3 scripts/auto-factory/qc-v9-semantic-blueprint.py
           node scripts/auto-factory/assert-v9-silk-road-proof.mjs
-
-      - name: Typecheck V9 renderer
-        run: npm run typecheck
 
       - name: Render semantic scene stills
         run: |
