@@ -4,7 +4,8 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 
-const script = new URL('./build-semantic-visual-blueprint-v9.mjs', import.meta.url).pathname;
+const brainScript = new URL('./build-semantic-visual-blueprint-v9.mjs', import.meta.url).pathname;
+const repairScript = new URL('./repair-v9-semantic-families.mjs', import.meta.url).pathname;
 
 const fixtures = [
   {
@@ -90,23 +91,32 @@ try {
       research: [],
     }, null, 2));
 
-    const result = spawnSync(process.execPath, [script], {
+    const env = {
+      ...process.env,
+      PLAN_PATH: planPath,
+      GEMINI_API_KEY: '',
+      CLOUDFLARE_ACCOUNT_ID: '',
+      CLOUDFLARE_API_TOKEN: '',
+      POLLINATIONS_API_KEY: '',
+    };
+    const result = spawnSync(process.execPath, [brainScript], {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        PLAN_PATH: planPath,
-        GEMINI_API_KEY: '',
-        CLOUDFLARE_ACCOUNT_ID: '',
-        CLOUDFLARE_API_TOKEN: '',
-        POLLINATIONS_API_KEY: '',
-      },
+      env,
       encoding: 'utf8',
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
+    const repair = spawnSync(process.execPath, [repairScript], {
+      cwd: process.cwd(),
+      env,
+      encoding: 'utf8',
+    });
+    assert.equal(repair.status, 0, repair.stderr || repair.stdout);
+
     const built = JSON.parse(await readFile(planPath, 'utf8'));
     assert.equal(built.v9.version, 9);
     assert.equal(built.v9.brainProvider, 'deterministic');
     assert.equal(built.v9.renderer, 'semantic-visual-documentary-v9');
+    assert.equal(built.v9.semanticFamilyRepair, 'final-spoken-claim-v1');
     assert.equal(built.scenes.length, 10);
     assert.ok(
       new Set(built.scenes.map((scene) => scene.v9Blueprint.sceneFamily)).size >= 4,
@@ -118,7 +128,7 @@ try {
     for (const family of fixture.expect) {
       assert.ok(
         built.scenes.some((scene) => scene.v9Blueprint.sceneFamily === family),
-        `${fixture.topic} did not produce ${family}`,
+        `${fixture.topic} did not produce ${family}: ${built.scenes.map((scene) => scene.v9Blueprint.sceneFamily).join(',')}`,
       );
     }
     const mapScenes = built.scenes.filter((scene) => scene.v9Blueprint.sceneFamily === 'geographic-route');
@@ -126,6 +136,7 @@ try {
     for (const scene of mapScenes) {
       assert.match(scene.v9Blueprint.visualStatement, /origin|destination|route|geographic|named/i);
     }
+    assert.equal(built.scenes.at(-1).v9Blueprint.sceneFamily, 'consequence-world');
   }
   console.log('V9 semantic visual brain regression: PASS');
 } finally {
