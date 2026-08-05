@@ -5,21 +5,87 @@ const planPath = process.env.PLAN_PATH || 'public/auto-factory/plan.json';
 const plan = JSON.parse(await readFile(planPath, 'utf8'));
 const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
 const lower = (value) => clean(value).toLowerCase();
+const unique = (values) => [...new Set(values.map(clean).filter(Boolean))];
 
 const FAMILY_META = {
-  'geographic-route': {physical: false, motion: 'route-trace-with-camera-follow', fallback: 'layered-route-map'},
-  'human-reconstruction': {physical: true, motion: 'parallax-push-with-action-reveal', fallback: 'layered-human-silhouette-scene'},
-  'environmental-reconstruction': {physical: true, motion: 'depth-parallax-establishing', fallback: 'layered-environment-stage'},
-  'industrial-process': {physical: true, motion: 'machine-follow-and-process-build', fallback: 'industrial-layer-stage'},
-  'mechanism-cutaway': {physical: true, motion: 'shell-open-and-signal-flow', fallback: 'semantic-cutaway'},
-  'microscopic-process': {physical: true, motion: 'macro-drift-and-cause-effect', fallback: 'organic-macro-stage'},
-  'market-exchange': {physical: true, motion: 'object-match-cut-through-handoffs', fallback: 'layered-exchange-stage'},
-  'network-flow': {physical: false, motion: 'node-activation-and-flow-carry', fallback: 'semantic-network-stage'},
-  'archival-evidence': {physical: true, motion: 'evidence-pullout-and-highlight', fallback: 'archive-desk-stage'},
-  'hazard-operation': {physical: true, motion: 'threat-approach-impact-and-response', fallback: 'hazard-operation-stage'},
-  'comparison-stage': {physical: false, motion: 'matched-split-and-difference-reveal', fallback: 'semantic-comparison-stage'},
-  'timeline-causality': {physical: false, motion: 'event-trace-and-causal-carry', fallback: 'causal-timeline-stage'},
-  'consequence-world': {physical: true, motion: 'pull-back-to-system-consequence', fallback: 'world-consequence-stage'},
+  'geographic-route': {
+    physical: false,
+    motion: 'route-trace-with-camera-follow',
+    fallback: 'layered-route-map',
+    goal: 'a directional geographic system with origin, destination, intermediary hubs, terrain and moving flow',
+  },
+  'human-reconstruction': {
+    physical: true,
+    motion: 'parallax-push-with-action-reveal',
+    fallback: 'layered-human-silhouette-scene',
+    goal: 'people physically performing the narrated action in a believable place, period and scale',
+  },
+  'environmental-reconstruction': {
+    physical: true,
+    motion: 'depth-parallax-establishing',
+    fallback: 'layered-environment-stage',
+    goal: 'a layered real environment whose terrain and scale explain the claim',
+  },
+  'industrial-process': {
+    physical: true,
+    motion: 'machine-follow-and-process-build',
+    fallback: 'industrial-layer-stage',
+    goal: 'real machinery, material flow, production stages and operator relationships',
+  },
+  'mechanism-cutaway': {
+    physical: true,
+    motion: 'shell-open-and-signal-flow',
+    fallback: 'semantic-cutaway',
+    goal: 'an object-preserving cutaway with layers, input, transformation and output',
+  },
+  'microscopic-process': {
+    physical: true,
+    motion: 'macro-drift-and-cause-effect',
+    fallback: 'organic-macro-stage',
+    goal: 'biological actors at coherent microscopic scale showing cause, survival, transfer or replication',
+  },
+  'market-exchange': {
+    physical: true,
+    motion: 'object-match-cut-through-handoffs',
+    fallback: 'layered-exchange-stage',
+    goal: 'people, goods, stalls and a visible physical handoff that makes exchange concrete',
+  },
+  'network-flow': {
+    physical: false,
+    motion: 'node-activation-and-flow-carry',
+    fallback: 'semantic-network-stage',
+    goal: 'specific physical hubs, direction, propagation and bottlenecks rather than decorative lines',
+  },
+  'archival-evidence': {
+    physical: true,
+    motion: 'evidence-pullout-and-highlight',
+    fallback: 'archive-desk-stage',
+    goal: 'specific documents, objects or records arranged with a readable evidence hierarchy',
+  },
+  'hazard-operation': {
+    physical: true,
+    motion: 'threat-approach-impact-and-response',
+    fallback: 'hazard-operation-stage',
+    goal: 'the physical threat, affected subject, impact and response in one spatial world',
+  },
+  'comparison-stage': {
+    physical: false,
+    motion: 'matched-split-and-difference-reveal',
+    fallback: 'semantic-comparison-stage',
+    goal: 'two concrete states compared at matched scale and camera position',
+  },
+  'timeline-causality': {
+    physical: false,
+    motion: 'event-trace-and-causal-carry',
+    fallback: 'causal-timeline-stage',
+    goal: 'distinct ordered events with visible causes carried into their consequences',
+  },
+  'consequence-world': {
+    physical: true,
+    motion: 'pull-back-to-system-consequence',
+    fallback: 'world-consequence-stage',
+    goal: 'a wide real-world consequence scene showing why the mechanism matters',
+  },
 };
 
 // Only classify from the actual spoken claim and explicitly required visuals.
@@ -62,29 +128,81 @@ const classify = (scene, index, total) => {
   ][index % 3];
 };
 
-const scenes = plan.scenes || [];
-for (const [index, scene] of scenes.entries()) {
-  const blueprint = scene.v9Blueprint || {};
-  const family = classify(scene, index, scenes.length);
+const applyFamily = (scene, blueprint, family, source) => {
   const meta = FAMILY_META[family];
-  scene.v9Blueprint = {
+  const subject = clean(scene.heroVisual || scene.title || scene.voiceLine || plan.topic || 'main subject');
+  const mustShow = unique([
+    subject,
+    ...(scene.mustShow || []),
+    ...(blueprint.worldEntities || []),
+  ]).slice(0, 8);
+  const environment = clean(
+    scene.visualContract?.visualDirection?.environment
+    || blueprint.layerPlan?.background?.[0]
+    || `${plan.category || 'documentary'}-specific real environment`,
+  );
+  const prompt = [
+    'Vertical 9:16 editorial documentary illustration.',
+    `Topic: ${clean(plan.topic)}.`,
+    `Scene claim: ${clean(scene.voiceLine)}.`,
+    `Scene family: ${family}.`,
+    `Show: ${mustShow.join(', ')}.`,
+    `Build ${meta.goal}.`,
+    `Environment: ${environment}.`,
+    'Clear foreground, midground and background with believable scale.',
+    'No generic infographic cards, no decorative geometry, no readable text, no logos.',
+  ].join(' ');
+
+  return {
     ...blueprint,
-    sceneId: Number(scene.id ?? index + 1),
+    sceneId: Number(scene.id),
     sceneFamily: family,
-    familyDecisionSource: index === scenes.length - 1
-      ? 'mandatory-ending-consequence'
-      : 'final-spoken-claim-repair',
+    familyDecisionSource: source,
+    visualStatement: `Make the narration visible by showing ${subject} as ${meta.goal}.`,
+    worldEntities: mustShow,
+    spatialRelations: [
+      `foreground: dominant ${subject} and the physical action required by the claim`,
+      `midground: ${meta.goal}`,
+      `background: ${environment} with topic-specific scale and context`,
+    ],
+    layerPlan: {
+      foreground: [subject, mustShow[1] || 'claim-specific physical prop'],
+      midground: [mustShow[2] || 'visible cause-and-effect action', meta.goal],
+      background: [environment, 'atmospheric depth and geographic context'],
+    },
     motionIntent: {
       ...(blueprint.motionIntent || {}),
       grammar: meta.motion,
+      heroAction: 'move only in the direction and manner implied by the spoken claim',
     },
     assetPlan: {
       ...(blueprint.assetPlan || {}),
       aiImageRecommended: meta.physical,
-      aiImagePriority: meta.physical ? (index === 0 ? 5 : 3) : 1,
+      aiImagePriority: meta.physical ? 3 : 1,
       fallbackRenderer: meta.fallback,
+      prompt,
+      searchQueries: unique([
+        `${clean(plan.topic)} ${subject}`,
+        `${subject} ${environment}`,
+        `${clean(scene.voiceLine)} documentary reference`,
+        ...((blueprint.assetPlan || {}).searchQueries || []),
+      ]).slice(0, 6),
     },
   };
+};
+
+const scenes = plan.scenes || [];
+for (const [index, scene] of scenes.entries()) {
+  const blueprint = scene.v9Blueprint || {};
+  const family = classify(scene, index, scenes.length);
+  scene.v9Blueprint = applyFamily(
+    scene,
+    blueprint,
+    family,
+    index === scenes.length - 1
+      ? 'mandatory-ending-consequence'
+      : 'final-spoken-claim-repair',
+  );
 }
 
 let mapCount = 0;
@@ -93,14 +211,15 @@ for (let index = 0; index < scenes.length - 1; index += 1) {
   if (blueprint.sceneFamily === 'geographic-route') {
     mapCount += 1;
     if (mapCount > 2) {
-      blueprint.sceneFamily = /mountain|desert|terrain|water|oasis/.test(localText(scenes[index]))
+      const replacement = /mountain|desert|terrain|water|oasis/.test(localText(scenes[index]))
         ? 'environmental-reconstruction'
         : 'human-reconstruction';
-      blueprint.familyDecisionSource = 'final-map-budget-repair';
-      const meta = FAMILY_META[blueprint.sceneFamily];
-      blueprint.motionIntent.grammar = meta.motion;
-      blueprint.assetPlan.aiImageRecommended = meta.physical;
-      blueprint.assetPlan.fallbackRenderer = meta.fallback;
+      scenes[index].v9Blueprint = applyFamily(
+        scenes[index],
+        blueprint,
+        replacement,
+        'final-map-budget-repair',
+      );
     }
   }
 }
@@ -110,14 +229,15 @@ for (let index = 2; index < scenes.length - 1; index += 1) {
   const previous = scenes[index - 1].v9Blueprint;
   const before = scenes[index - 2].v9Blueprint;
   if (current.sceneFamily === previous.sceneFamily && current.sceneFamily === before.sceneFamily) {
-    current.sceneFamily = /mountain|desert|terrain|water|environment/.test(localText(scenes[index]))
+    const replacement = /mountain|desert|terrain|water|environment/.test(localText(scenes[index]))
       ? 'environmental-reconstruction'
       : 'human-reconstruction';
-    current.familyDecisionSource = 'final-family-spam-repair';
-    const meta = FAMILY_META[current.sceneFamily];
-    current.motionIntent.grammar = meta.motion;
-    current.assetPlan.aiImageRecommended = meta.physical;
-    current.assetPlan.fallbackRenderer = meta.fallback;
+    scenes[index].v9Blueprint = applyFamily(
+      scenes[index],
+      current,
+      replacement,
+      'final-family-spam-repair',
+    );
   }
 }
 
@@ -131,7 +251,7 @@ plan.v9 = {
   mapSceneCount: finalFamilies.filter((family) => family === 'geographic-route').length,
   representationalCount,
   representationalRatio: Number((representationalCount / Math.max(1, finalFamilies.length)).toFixed(3)),
-  semanticFamilyRepair: 'final-spoken-claim-v2',
+  semanticFamilyRepair: 'final-spoken-claim-v3',
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
