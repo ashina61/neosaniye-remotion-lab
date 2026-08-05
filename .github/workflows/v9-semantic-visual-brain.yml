@@ -4,9 +4,12 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'src/auto-factory/SemanticVisualAutoShortV9.tsx'
+      - 'src/auto-factory/BrandedAutoShortV4.tsx'
       - 'scripts/auto-factory/*v9*'
       - 'docs/V9_MASTER_PLAN.md'
       - '.github/workflows/v9-semantic-visual-brain.yml'
+      - 'package.json'
 
 permissions:
   contents: read
@@ -14,7 +17,11 @@ permissions:
 jobs:
   semantic-visual-brain:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      V9_AI_PROVIDER: auto
+      V9_MAX_AI_IMAGES: '0'
 
     steps:
       - name: Checkout
@@ -24,24 +31,81 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Syntax checks
+      - name: Install render dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          npm install --no-audit --no-fund
+
+      - name: Syntax and cross-topic regression
         run: |
           node --check scripts/auto-factory/v9-ai-provider-router.mjs
           node --check scripts/auto-factory/build-semantic-visual-blueprint-v9.mjs
           node --check scripts/auto-factory/generate-v9-ai-assets.mjs
           node --check scripts/auto-factory/test-v9-semantic-visual-brain.mjs
+          node --check scripts/auto-factory/create-v9-silk-road-fixture.mjs
           python -m py_compile scripts/auto-factory/qc-v9-semantic-blueprint.py
+          npm run auto:v9:test
 
-      - name: Cross-topic semantic regression
-        env:
-          GEMINI_API_KEY: ''
-          CLOUDFLARE_ACCOUNT_ID: ''
-          CLOUDFLARE_API_TOKEN: ''
-          POLLINATIONS_API_KEY: ''
-        run: node scripts/auto-factory/test-v9-semantic-visual-brain.mjs
+      - name: Build controlled Silk Road plan
+        run: |
+          node scripts/auto-factory/create-v9-silk-road-fixture.mjs
+          ffmpeg -y -f lavfi -i anullsrc=r=48000:cl=stereo -t 46 \
+            -c:a pcm_s16le public/auto-factory/audio/final.wav
+
+      - name: Run Gemini semantic brain
+        run: |
+          npm run auto:v9:brain
+          python3 scripts/auto-factory/qc-v9-semantic-blueprint.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('public/auto-factory/plan.json').read_text(encoding='utf-8'))
+          v9 = plan.get('v9', {})
+          families = [scene.get('v9Blueprint', {}).get('sceneFamily') for scene in plan.get('scenes', [])]
+          print('V9_PROVIDER=' + str(v9.get('brainProvider')))
+          print('V9_FAMILIES=' + ','.join(map(str, families)))
+          print('V9_REPRESENTATIONAL_RATIO=' + str(v9.get('representationalRatio')))
+          print('V9_MAP_SCENES=' + str(v9.get('mapSceneCount')))
+          PY
+
+      - name: Typecheck V9 renderer
+        run: npm run typecheck
+
+      - name: Render semantic scene stills
+        run: |
+          mkdir -p out/review
+          python3 - <<'PY' > /tmp/v9-frames.txt
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('public/auto-factory/plan.json').read_text(encoding='utf-8'))
+          for scene in plan['scenes']:
+              frame = round((float(scene['start']) + float(scene['duration']) * 0.58) * int(plan['fps']))
+              print(f"{int(scene['id']):02d} {frame}")
+          PY
+          while read -r scene_id frame; do
+            npx remotion still src/auto-factory/index.ts NeoSaniyeAuto \
+              "out/review/scene-${scene_id}.png" --frame="$frame" --log=error
+          done < /tmp/v9-frames.txt
+
+      - name: Build V9 contact sheet
+        run: |
+          ffmpeg -y -framerate 1 -i out/review/scene-%02d.png \
+            -vf "scale=216:384,tile=5x2" -frames:v 1 out/review/v9-silk-road-contact.jpg
+
+      - name: Upload V9 visual proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9-silk-road-semantic-proof
+          path: |
+            out/review/v9-silk-road-contact.jpg
+            out/review/scene-*.png
+            public/auto-factory/plan.json
+          retention-days: 7
