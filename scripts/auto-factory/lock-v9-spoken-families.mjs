@@ -1,10 +1,10 @@
 import {readFile, writeFile} from 'node:fs/promises';
 import process from 'node:process';
+import {classifyV9Scene} from './v9-semantic-classifier.mjs';
 
 const planPath = process.env.PLAN_PATH || 'public/auto-factory/plan.json';
 const plan = JSON.parse(await readFile(planPath, 'utf8'));
 const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
-const lower = (value) => clean(value).toLowerCase();
 const unique = (values) => [...new Set((values || []).map(clean).filter(Boolean))];
 
 const META = {
@@ -23,43 +23,9 @@ const META = {
   'consequence-world': {physical: true, grammar: 'pull-back-to-system-consequence', fallback: 'world-consequence-stage', goal: 'a wide real-world consequence showing why the mechanism matters'},
 };
 
-const spoken = (scene) => lower([scene.title, scene.voiceLine, scene.sceneGoal].join(' '));
-const visible = (scene) => lower([scene.heroVisual, ...(scene.mustShow || [])].join(' '));
-
-const classify = (scene, index, total) => {
-  const speech = spoken(scene);
-  const text = `${speech} ${visible(scene)}`;
-  if (index === total - 1) return 'consequence-world';
-
-  if (/\b(paper|manuscripts?|documents?|records?|archives?|reports?|decrees?|photographs?|religions?|stories|knowledge|ideas?|scientific knowledge)\b/.test(speech)) return 'archival-evidence';
-  if (/\b(wars?|blocked|blockage|blockade|danger|threat|attack|damage|repair|protect\w*|failure|break one link|tax\w*|empires?|fought|disruption|harder to treat)\b/.test(speech)) return 'hazard-operation';
-  if (/\b(market|bazaar|exchange|handoff|goods? changed hands?|bought|sold|stalls?|cargo transfer)\b/.test(speech)) return 'market-exchange';
-
-  const terrain = /\b(mountains?|deserts?|terrain|water sources?|oases?|oasis|passes?|forests?|ocean floor|habitats?|environmental constraints?)\b/.test(speech);
-  const terrainControls = terrain && /\b(decid\w*|shap\w*|determin\w*|limit\w*|forc\w*|control\w*|made|make)\b/.test(speech);
-  if (terrainControls) return 'environmental-reconstruction';
-
-  const geographic = /\b(routes?|roads?|corridors?|lanes?)\b.*\b(link|links|linked|linking|connect|connects|connected|connecting|from|between)\b|\b(link|links|linked|linking|connect|connects|connected|connecting)\b.*\b(east|west|asia|europe|continents?|countries|regions?|cities)\b|\bfrom\b.+\bto\b|\bacross continents?\b/.test(speech);
-  if (geographic) return 'geographic-route';
-
-  if (/\b(ships?|merchant vessels?|ports?|harbou?rs?|docks?|sea routes?|maritime|aircraft)\b/.test(text)) return 'human-reconstruction';
-  if (/\b(caravans?|camels?|merchants?|merchant journey|travell?ers?|pilgrims?|workers?|engineers?|scientists?|soldiers?|operators?|scholars?)\b/.test(text)) return 'human-reconstruction';
-  if (/\b(oasis cities?|city gates?|relay hubs?|samarkand|cities became|city became|trading cities?)\b/.test(text)) return 'human-reconstruction';
-
-  if (/\b(gene transfer|genes?\s+(?:can\s+also\s+)?move|dna exchange|lithography machines?.*(?:circuit|pattern)|microscopic circuit patterns?|circuit patterns?|transistors?|nanometers?|wafer layers?|inside|layers?|cores?|cutaway|components?|mechanisms?|signals?|fibers?|membranes?|receptors?)\b/.test(speech)) return 'mechanism-cutaway';
-  if (/\b(spread between|spreads? between|propagat\w*|global.*depend|depend\w*.*global|supply chains?|distributed networks?|bottlenecks?|flow through the system|larger share of the colony)\b/.test(speech)) return 'network-flow';
-  if (/\b(compare|versus|before|after|more than|less than|difference|two sides|alternative production|alternative capacity)\b/.test(speech)) return 'comparison-stage';
-  if (/\b(factories|factory|fabs?|manufactur\w*|produc\w*|machines?|plants?|clean rooms?|assembly|lithography equipment)\b/.test(speech)) return 'industrial-process';
-  if (/\b(bacter\w*|cells?|viruses?|microb\w*|mutat\w*|genes?|immune\w*|microscop\w*|colon\w*|selection pressure|resistance traits?)\b/.test(speech)) return 'microscopic-process';
-  if (/\b(first|then|later|eventually|centuries?|years?|timeline|led to|caused|generation after generation)\b/.test(speech)) return 'timeline-causality';
-  if (terrain) return 'environmental-reconstruction';
-
-  return index === 0 ? 'environmental-reconstruction' : ['human-reconstruction', 'environmental-reconstruction', 'archival-evidence'][index % 3];
-};
-
-const apply = (scene, family, source) => {
+const apply = (scene, decision) => {
   const current = scene.v9Blueprint || {};
-  const meta = META[family];
+  const meta = META[decision.family];
   const subject = clean(scene.heroVisual || scene.title || scene.voiceLine || plan.topic || 'main subject');
   const worldEntities = unique([subject, ...(scene.mustShow || []), ...(current.worldEntities || [])]).slice(0, 10);
   const environment = clean(
@@ -67,12 +33,14 @@ const apply = (scene, family, source) => {
       || current.layerPlan?.background?.[0]
       || `${plan.category || 'documentary'}-specific real environment`,
   );
+
   scene.v9Blueprint = {
     ...current,
     sceneId: Number(scene.id),
-    sceneFamily: family,
-    familyDecisionSource: source,
-    visualStatement: `Make the spoken claim visible as ${meta.goal}.`,
+    sceneFamily: decision.family,
+    sceneArchetype: decision.archetype,
+    familyDecisionSource: `semantic-classifier:${decision.reason}`,
+    visualStatement: `Make the spoken claim visible as ${meta.goal}; stage it as ${decision.archetype}.`,
     worldEntities,
     spatialRelations: [
       `foreground: ${subject} and the physical action required by the spoken claim`,
@@ -98,7 +66,8 @@ const apply = (scene, family, source) => {
         'Vertical 9:16 editorial documentary illustration.',
         `Topic: ${clean(plan.topic)}.`,
         `Scene claim: ${clean(scene.voiceLine)}.`,
-        `Locked scene family: ${family}.`,
+        `Locked scene family: ${decision.family}.`,
+        `Locked scene archetype: ${decision.archetype}.`,
         `Show: ${worldEntities.join(', ')}.`,
         `Build ${meta.goal}.`,
         `Environment: ${environment}.`,
@@ -106,7 +75,7 @@ const apply = (scene, family, source) => {
         'Avoid dashboard layouts and abstract decorative marks. No readable text, logos or watermarks.',
       ].join(' '),
       searchQueries: unique([
-        `${clean(plan.topic)} ${subject}`,
+        `${clean(plan.topic)} ${decision.archetype}`,
         `${subject} ${environment}`,
         `${clean(scene.voiceLine)} documentary reference`,
         ...((current.assetPlan || {}).searchQueries || []),
@@ -117,38 +86,24 @@ const apply = (scene, family, source) => {
 
 const scenes = plan.scenes || [];
 for (const [index, scene] of scenes.entries()) {
-  apply(scene, classify(scene, index, scenes.length), index === scenes.length - 1 ? 'mandatory-ending-consequence' : 'spoken-action-lock-v1');
-}
-
-let mapCount = 0;
-for (let index = 0; index < scenes.length - 1; index += 1) {
-  if (scenes[index].v9Blueprint.sceneFamily === 'geographic-route') {
-    mapCount += 1;
-    if (mapCount > 2) {
-      apply(scenes[index], /mountain|desert|terrain|water|oasis/.test(spoken(scenes[index])) ? 'environmental-reconstruction' : 'human-reconstruction', 'spoken-action-map-budget-repair');
-    }
-  }
-}
-
-for (let index = 2; index < scenes.length - 1; index += 1) {
-  const family = scenes[index].v9Blueprint.sceneFamily;
-  if (family === scenes[index - 1].v9Blueprint.sceneFamily && family === scenes[index - 2].v9Blueprint.sceneFamily) {
-    apply(scenes[index], /mountain|desert|terrain|water|environment/.test(spoken(scenes[index])) ? 'environmental-reconstruction' : 'human-reconstruction', 'spoken-action-family-spam-repair');
-  }
+  apply(scene, classifyV9Scene({scene, index, total: scenes.length}));
 }
 
 const families = scenes.map((scene) => scene.v9Blueprint.sceneFamily);
+const archetypes = scenes.map((scene) => scene.v9Blueprint.sceneArchetype);
 const physicalFamilies = new Set(Object.entries(META).filter(([, value]) => value.physical).map(([family]) => family));
 const representationalCount = families.filter((family) => physicalFamilies.has(family)).length;
 plan.v9 = {
   ...(plan.v9 || {}),
   sceneFamilies: families,
+  sceneArchetypes: archetypes,
   familyCount: new Set(families).size,
+  archetypeCount: new Set(archetypes).size,
   mapSceneCount: families.filter((family) => family === 'geographic-route').length,
   representationalCount,
   representationalRatio: Number((representationalCount / Math.max(1, families.length)).toFixed(3)),
-  spokenFamilyLock: 'spoken-action-lock-v1',
+  spokenFamilyLock: 'semantic-classifier-v1',
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
-console.log(`V9 spoken family lock ready: ${families.join(' -> ')}`);
+console.log(`V9 semantic lock ready: ${archetypes.join(' -> ')}`);
