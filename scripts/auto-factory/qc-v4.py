@@ -18,9 +18,13 @@ GRID_ROWS = 10
 
 
 def extract_frame(second: float) -> bytes:
+    # Analyze the visual stage rather than the shared title/caption chrome.
+    # The fixed editorial shell made unrelated V8 scenes look artificially
+    # centered and similar when the whole vertical frame was downsampled.
     command = [
         "ffmpeg", "-v", "error", "-ss", f"{second:.3f}", "-i", str(FULLHD),
-        "-frames:v", "1", "-vf", f"scale={WIDTH}:{HEIGHT},format=gray",
+        "-frames:v", "1",
+        "-vf", f"crop=iw:ih*0.70:0:ih*0.15,scale={WIDTH}:{HEIGHT},format=gray",
         "-f", "rawvideo", "pipe:1",
     ]
     result = subprocess.run(command, check=True, capture_output=True)
@@ -69,10 +73,21 @@ def similarity(left: list[float], right: list[float]) -> float:
 
 
 def motif_signature(scene: dict) -> str:
-    contract = scene.get("visualContract") or {}
-    motifs = contract.get("motifs") or []
-    kinds = [str(motif.get("kind", "")) for motif in motifs if isinstance(motif, dict)]
-    return "|".join(kinds)
+    motifs = (scene.get("visualContract") or {}).get("motifs") or []
+    return "|".join(str(item.get("kind", "")) for item in motifs if isinstance(item, dict))
+
+
+def longest_run(values: list[str]) -> int:
+    best = current = 0
+    previous: object = object()
+    for value in values:
+        if value == previous:
+            current += 1
+        else:
+            current = 1
+            previous = value
+        best = max(best, current)
+    return best
 
 
 plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
@@ -80,26 +95,38 @@ report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 scenes = plan.get("scenes", [])
 v4 = plan.get("v4") or {}
 v7 = plan.get("v7") or {}
-v7_active = int(v7.get("version", 0)) == 7 and v7.get("renderer") == "adaptive-documentary-v7"
+v8 = plan.get("v8") or {}
+
+v8_active = (
+    int(v8.get("version", 0)) == 8
+    and v8.get("renderer") == "visual-motion-documentary-v8"
+    and bool(scenes)
+    and all((scene.get("visualContract") or {}).get("version") == 8 for scene in scenes)
+    and all((scene.get("motionContract") or {}).get("version") == 8 for scene in scenes)
+)
+v7_active = not v8_active and int(v7.get("version", 0)) == 7 and v7.get("renderer") == "adaptive-documentary-v7"
 
 grammars = [str(scene.get("sceneGrammar", "")) for scene in scenes]
-cameras = [str(scene.get("cameraMove", "")) for scene in scenes]
+legacy_cameras = [str(scene.get("cameraMove", "")) for scene in scenes]
 text_modes = [str(scene.get("textMode", "")) for scene in scenes]
 biases = [str(scene.get("compositionBias", "")) for scene in scenes]
 layer_counts = [int(scene.get("layerCount", 0)) for scene in scenes]
 match_tokens = [str(scene.get("matchCutToken", "")) for scene in scenes]
 semantic_rules = [str(scene.get("semanticLockRule", "")).strip() for scene in scenes]
 semantic_renderer_active = bool(scenes) and all(semantic_rules)
-mode_signatures = [str((scene.get("visualContract") or {}).get("mode", "")) for scene in scenes]
+
+contracts = [scene.get("visualContract") or {} for scene in scenes]
+motions = [scene.get("motionContract") or {} for scene in scenes]
+base_mode_signatures = [str(contract.get("mode", "")) for contract in contracts]
 motif_signatures = [motif_signature(scene) for scene in scenes]
-family_signatures = [str(((scene.get("visualContract") or {}).get("style") or {}).get("family", "")) for scene in scenes]
-consecutive_grammar_repeats = sum(
-    1 for index in range(1, len(grammars)) if grammars[index] == grammars[index - 1]
-)
-consecutive_semantic_repeats = sum(
-    1 for index in range(1, len(semantic_rules))
-    if semantic_rules[index] == semantic_rules[index - 1]
-)
+family_signatures = [str((contract.get("style") or {}).get("family", "")) for contract in contracts]
+v8_modes = [str((contract.get("visualDirection") or {}).get("sceneMode", "")) for contract in contracts]
+v8_compositions = [str((contract.get("visualDirection") or {}).get("composition", "")) for contract in contracts]
+v8_cameras = [str(motion.get("cameraMove", "")) for motion in motions]
+v8_transitions = [str(motion.get("transitionIn", "")) for motion in motions]
+
+consecutive_grammar_repeats = sum(1 for index in range(1, len(grammars)) if grammars[index] == grammars[index - 1])
+consecutive_semantic_repeats = sum(1 for index in range(1, len(semantic_rules)) if semantic_rules[index] == semantic_rules[index - 1])
 
 signatures: list[list[float]] = []
 centers_x: list[float] = []
@@ -115,31 +142,42 @@ for scene in scenes:
     except (subprocess.CalledProcessError, RuntimeError) as error:
         frame_errors.append(f"scene-{scene.get('id')}: {error}")
 
-adjacent_similarities = [
-    similarity(signatures[index - 1], signatures[index])
-    for index in range(1, len(signatures))
-]
+adjacent_similarities = [similarity(signatures[index - 1], signatures[index]) for index in range(1, len(signatures))]
 average_adjacent_similarity = statistics.mean(adjacent_similarities) if adjacent_similarities else 1.0
 maximum_adjacent_similarity = max(adjacent_similarities, default=1.0)
-raw_near_duplicate_pairs = [
-    index for index, value in enumerate(adjacent_similarities, start=1) if value >= 0.985
-]
+raw_near_duplicate_pairs = [index for index, value in enumerate(adjacent_similarities, start=1) if value >= 0.985]
 semantic_near_duplicate_pairs: list[dict[str, object]] = []
 for left_scene_number in raw_near_duplicate_pairs:
     left = left_scene_number - 1
     right = left_scene_number
     same_semantic = bool(semantic_rules[left]) and semantic_rules[left] == semantic_rules[right]
     same_motifs = bool(motif_signatures[left]) and motif_signatures[left] == motif_signatures[right]
-    same_mode = bool(mode_signatures[left]) and mode_signatures[left] == mode_signatures[right]
     same_family = bool(family_signatures[left]) and family_signatures[left] == family_signatures[right]
-    if not v7_active or (same_semantic and same_motifs and same_mode and same_family):
+    if v8_active:
+        same_mode = bool(v8_modes[left]) and v8_modes[left] == v8_modes[right]
+        same_composition = bool(v8_compositions[left]) and v8_compositions[left] == v8_compositions[right]
+        same_camera = bool(v8_cameras[left]) and v8_cameras[left] == v8_cameras[right]
+        duplicate = same_mode and same_composition and same_camera and same_motifs and (same_semantic or same_family)
+    elif v7_active:
+        same_mode = bool(base_mode_signatures[left]) and base_mode_signatures[left] == base_mode_signatures[right]
+        same_composition = False
+        same_camera = False
+        duplicate = same_semantic and same_motifs and same_mode and same_family
+    else:
+        same_mode = bool(base_mode_signatures[left]) and base_mode_signatures[left] == base_mode_signatures[right]
+        same_composition = False
+        same_camera = False
+        duplicate = True
+    if duplicate:
         semantic_near_duplicate_pairs.append({
             "left_scene": left_scene_number,
             "right_scene": left_scene_number + 1,
             "similarity": round(adjacent_similarities[left], 6),
             "semantic_rule": semantic_rules[left],
             "motif_signature": motif_signatures[left],
-            "mode": mode_signatures[left],
+            "mode": v8_modes[left] if v8_active else base_mode_signatures[left],
+            "composition": v8_compositions[left] if v8_active else "",
+            "camera": v8_cameras[left] if v8_active else "",
             "family": family_signatures[left],
         })
 
@@ -155,10 +193,26 @@ checks = {
     "v4_match_cut_tokens_present": bool(match_tokens) and all(len(value) >= 2 for value in match_tokens),
     "v4_rendered_frames_readable": len(signatures) == len(scenes) and not frame_errors,
     "v4_no_rendered_near_duplicate_pairs": not semantic_near_duplicate_pairs,
-    "v4_average_layout_similarity": average_adjacent_similarity <= 0.972,
-    "v4_visual_center_x_diversity": center_x_spread >= 0.025,
-    "v4_visual_center_y_diversity": center_y_spread >= 0.035,
 }
+
+if v8_active:
+    checks.update({
+        "v8_rendered_layout_qc_active": True,
+        "v8_rendered_scene_mode_diversity": len(set(v8_modes)) >= min(3, len(scenes)),
+        "v8_rendered_composition_diversity": len(set(v8_compositions)) >= min(4, len(scenes)),
+        "v8_rendered_camera_diversity": len(set(v8_cameras)) >= min(3, len(scenes)),
+        "v8_rendered_transition_diversity": len(set(v8_transitions)) >= min(3, len(scenes)),
+        "v8_no_semantic_render_duplicates": not semantic_near_duplicate_pairs,
+        "v8_average_stage_similarity": average_adjacent_similarity <= 0.985,
+        "v8_no_mode_spam": longest_run(v8_modes) <= 4,
+        "v8_no_composition_spam": longest_run(v8_compositions) <= 2,
+    })
+else:
+    checks.update({
+        "v4_average_layout_similarity": average_adjacent_similarity <= 0.972,
+        "v4_visual_center_x_diversity": center_x_spread >= 0.025,
+        "v4_visual_center_y_diversity": center_y_spread >= 0.035,
+    })
 
 if semantic_renderer_active:
     checks.update({
@@ -170,7 +224,7 @@ if semantic_renderer_active:
     })
 else:
     checks.update({
-        "v4_camera_diversity": len(set(cameras)) >= 4,
+        "v4_camera_diversity": len(set(legacy_cameras)) >= 4,
         "v4_text_mode_diversity": len(set(text_modes)) >= 3,
         "v4_composition_bias_diversity": len(set(biases)) >= 4,
         "v4_independent_layer_density": bool(layer_counts) and all(7 <= value <= 12 for value in layer_counts),
@@ -183,18 +237,20 @@ if v7_active:
         "v7_semantic_duplicate_guard": not semantic_near_duplicate_pairs,
     })
 
-active_renderer = "adaptive-documentary-v7" if v7_active else (
-    "semantic-procedural-v5" if semantic_renderer_active else v4.get("renderer")
+active_renderer = "visual-motion-documentary-v8" if v8_active else (
+    "adaptive-documentary-v7" if v7_active else (
+        "semantic-procedural-v5" if semantic_renderer_active else v4.get("renderer")
+    )
 )
-renderer_version = 7 if v7_active else (5 if semantic_renderer_active else 4)
+renderer_version = 8 if v8_active else (7 if v7_active else (5 if semantic_renderer_active else 4))
 report.setdefault("checks", {}).update(checks)
 report["renderer_version"] = renderer_version
 report["renderer"] = active_renderer
 report["v4_visual_world"] = v4.get("visualWorld")
 report["v4_scene_grammars"] = grammars
 report["v4_unique_scene_grammars"] = len(set(grammars))
-report["v4_camera_moves"] = cameras
-report["v4_unique_camera_moves"] = len(set(cameras))
+report["v4_camera_moves"] = legacy_cameras
+report["v4_unique_camera_moves"] = len(set(legacy_cameras))
 report["v4_text_modes"] = text_modes
 report["v4_composition_biases"] = biases
 report["v4_layer_counts"] = layer_counts
@@ -206,6 +262,12 @@ report["v4_adjacent_layout_similarities"] = [round(value, 6) for value in adjace
 report["v4_average_adjacent_layout_similarity"] = round(average_adjacent_similarity, 6)
 report["v4_maximum_adjacent_layout_similarity"] = round(maximum_adjacent_similarity, 6)
 report["v4_rendered_near_duplicate_pairs"] = len(semantic_near_duplicate_pairs)
+report["v8_raw_visual_similarity_pairs"] = raw_near_duplicate_pairs if v8_active else []
+report["v8_semantic_near_duplicate_pairs"] = semantic_near_duplicate_pairs if v8_active else []
+report["v8_scene_modes_rendered"] = v8_modes if v8_active else []
+report["v8_compositions_rendered"] = v8_compositions if v8_active else []
+report["v8_camera_moves_rendered"] = v8_cameras if v8_active else []
+report["v8_transitions_rendered"] = v8_transitions if v8_active else []
 report["v7_raw_visual_similarity_pairs"] = raw_near_duplicate_pairs if v7_active else []
 report["v7_semantic_near_duplicate_pairs"] = semantic_near_duplicate_pairs if v7_active else []
 report["v7_motif_signatures"] = motif_signatures if v7_active else []
@@ -221,7 +283,8 @@ summary = {
     "renderer_version": renderer_version,
     "grammar_count": len(set(grammars)),
     "semantic_rule_count": len(set(semantic_rules)),
-    "camera_count": len(set(cameras)),
+    "camera_count": len(set(v8_cameras if v8_active else legacy_cameras)),
+    "composition_count": len(set(v8_compositions)) if v8_active else len(set(biases)),
     "average_adjacent_layout_similarity": round(average_adjacent_similarity, 6),
     "maximum_adjacent_layout_similarity": round(maximum_adjacent_similarity, 6),
     "raw_visual_similarity_pairs": raw_near_duplicate_pairs,
