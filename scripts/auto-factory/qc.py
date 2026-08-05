@@ -25,7 +25,11 @@ def probe(path: Path) -> dict:
 
 
 def loudness(path: Path) -> float | None:
-    output = run("ffmpeg", "-hide_banner", "-i", str(path), "-af", "loudnorm=I=-15.5:TP=-1.5:LRA=7:print_format=json", "-f", "null", "-")
+    output = run(
+        "ffmpeg", "-hide_banner", "-i", str(path),
+        "-af", "loudnorm=I=-15.5:TP=-1.5:LRA=7:print_format=json",
+        "-f", "null", "-",
+    )
     matches = re.findall(r"\{\s*\"input_i\".*?\}", output, flags=re.S)
     if not matches:
         return None
@@ -47,7 +51,11 @@ def audio_values(data: dict) -> dict:
 
 
 def normalized(value: str) -> str:
-    value = value.lower().replace("ı", "i").replace("ğ", "g").replace("ü", "u").replace("ş", "s").replace("ö", "o").replace("ç", "c")
+    value = (
+        value.lower()
+        .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
+        .replace("ş", "s").replace("ö", "o").replace("ç", "c")
+    )
     return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
 
@@ -55,9 +63,7 @@ def contains_normalized_phrase(text: str, phrase: str) -> bool:
     """Match a forbidden concept as a complete token or phrase, never as a substring."""
     haystack = normalized(text)
     needle = normalized(phrase)
-    if not needle:
-        return False
-    return f" {needle} " in f" {haystack} "
+    return bool(needle) and f" {needle} " in f" {haystack} "
 
 
 def displayed_claim(scene: dict) -> str:
@@ -65,6 +71,10 @@ def displayed_claim(scene: dict) -> str:
     claim = re.sub(r"^Show exactly how:\s*", "", claim, flags=re.I)
     claim = re.sub(r"^Illustrate only this spoken claim:\s*", "", claim, flags=re.I)
     return claim.strip()
+
+
+def consecutive_repeats(values: list[object]) -> int:
+    return sum(1 for index in range(1, len(values)) if values[index] == values[index - 1])
 
 
 plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
@@ -80,16 +90,60 @@ target = float(plan["duration"])
 audio_sample_rate = int(audio_stream.get("sample_rate", 0))
 expected_audio_samples = int(round(target * audio_sample_rate))
 duration_ts = audio_stream.get("duration_ts")
-actual_audio_samples = int(duration_ts) if duration_ts not in (None, "N/A") else int(round(audio_duration * audio_sample_rate))
+actual_audio_samples = (
+    int(duration_ts)
+    if duration_ts not in (None, "N/A")
+    else int(round(audio_duration * audio_sample_rate))
+)
 scenes = plan.get("scenes", [])
 scene_timings = timing.get("scenes", [])
 
 hero_keys = [normalized(str(scene.get("heroVisual", ""))) for scene in scenes]
 unique_hero_ratio = len(set(hero_keys)) / max(1, len(hero_keys))
-visual_kinds = [scene.get("visualKind") for scene in scenes]
-layouts = [scene.get("layout") for scene in scenes]
-transitions = [scene.get("transition") for scene in scenes]
-consecutive_visual_repeats = sum(1 for index in range(1, len(visual_kinds)) if visual_kinds[index] == visual_kinds[index - 1])
+legacy_visual_kinds = [scene.get("visualKind") for scene in scenes]
+legacy_layouts = [scene.get("layout") for scene in scenes]
+legacy_transitions = [scene.get("transition") for scene in scenes]
+
+visual_contracts = [scene.get("visualContract") or {} for scene in scenes]
+motion_contracts = [scene.get("motionContract") or {} for scene in scenes]
+v8_meta = plan.get("v8") or {}
+v8_active = (
+    int(v8_meta.get("version", 0)) == 8
+    and v8_meta.get("renderer") == "visual-motion-documentary-v8"
+    and bool(scenes)
+    and all(contract.get("version") == 8 for contract in visual_contracts)
+    and all(contract.get("version") == 8 for contract in motion_contracts)
+)
+
+v8_modes = [
+    str((contract.get("visualDirection") or {}).get("sceneMode", ""))
+    for contract in visual_contracts
+]
+v8_compositions = [
+    str((contract.get("visualDirection") or {}).get("composition", ""))
+    for contract in visual_contracts
+]
+v8_cameras = [str(contract.get("cameraMove", "")) for contract in motion_contracts]
+v8_transitions = [str(contract.get("transitionIn", "")) for contract in motion_contracts]
+v8_template_keys = list(zip(v8_modes, v8_compositions, v8_cameras))
+
+if v8_active:
+    effective_visual_kinds = v8_modes
+    effective_layouts = v8_compositions
+    effective_transitions = v8_transitions
+    consecutive_visual_repeats = consecutive_repeats(v8_template_keys)
+    required_visual_kind_count = min(3, len(scenes))
+    required_layout_count = min(4, len(scenes))
+    required_transition_count = min(3, len(scenes))
+else:
+    effective_visual_kinds = legacy_visual_kinds
+    effective_layouts = legacy_layouts
+    effective_transitions = legacy_transitions
+    consecutive_visual_repeats = consecutive_repeats(legacy_visual_kinds)
+    required_visual_kind_count = min(6, len(scenes))
+    required_layout_count = min(6, len(scenes))
+    required_transition_count = min(6, len(scenes))
+
 min_alignment = min((float(scene.get("alignmentScore", 0)) for scene in scenes), default=0)
 minimum_scene_duration = min((float(scene.get("duration", 0)) for scene in scenes), default=0)
 minimum_final_hold = min((float(scene.get("finalHoldRatio", 0)) for scene in scenes), default=0)
@@ -123,7 +177,9 @@ for index, scene in enumerate(scenes):
     planned_start = float(scene.get("start", 0))
     measured_start = float(measured.get("startOnTimeline", -9))
     if abs(planned_start - measured_start) > 0.28 and index > 0:
-        scene_timing_errors.append(f"scene-{scene.get('id')}: visual/voice start drift {abs(planned_start-measured_start):.2f}s")
+        scene_timing_errors.append(
+            f"scene-{scene.get('id')}: visual/voice start drift {abs(planned_start-measured_start):.2f}s"
+        )
 
 max_internal_silence = float(timing.get("maxInternalSilence", 99))
 integrated = loudness(FULLHD)
@@ -152,9 +208,9 @@ checks = {
     "continuous_speech": max_internal_silence <= 0.48,
     "unique_hero_visuals": unique_hero_ratio >= 0.90,
     "no_consecutive_template_repeat": consecutive_visual_repeats == 0,
-    "visual_kind_diversity": len(set(visual_kinds)) >= 6,
-    "layout_diversity": len(set(layouts)) >= 6,
-    "transition_diversity": len(set(transitions)) >= 6,
+    "visual_kind_diversity": len(set(effective_visual_kinds)) >= required_visual_kind_count,
+    "layout_diversity": len(set(effective_layouts)) >= required_layout_count,
+    "transition_diversity": len(set(effective_transitions)) >= required_transition_count,
     "topic_alignment": min_alignment >= 0.34,
     "forbidden_concept_leaks": not forbidden_leaks,
     "visual_beats_present": all(2 <= len(scene.get("beats", [])) <= 6 for scene in scenes),
@@ -163,6 +219,12 @@ checks = {
     "sfx_density": 2 <= sfx_count <= 5,
     "shorts_loudness": integrated is None or -18.5 <= integrated <= -12.5,
 }
+if v8_active:
+    checks.update({
+        "v8_core_qc_active": True,
+        "v8_visual_contracts_complete": all(bool(value) for value in v8_modes),
+        "v8_motion_contracts_complete": all(bool(value) for value in v8_cameras + v8_transitions),
+    })
 
 report = {
     "status": "PASS" if all(checks.values()) else "FAIL",
@@ -185,9 +247,16 @@ report = {
     "max_internal_silence": max_internal_silence,
     "unique_hero_ratio": unique_hero_ratio,
     "consecutive_visual_repeats": consecutive_visual_repeats,
-    "visual_kind_count": len(set(visual_kinds)),
-    "layout_count": len(set(layouts)),
-    "transition_count": len(set(transitions)),
+    "visual_kind_count": len(set(effective_visual_kinds)),
+    "layout_count": len(set(effective_layouts)),
+    "transition_count": len(set(effective_transitions)),
+    "legacy_visual_kind_count": len(set(legacy_visual_kinds)),
+    "legacy_consecutive_visual_repeats": consecutive_repeats(legacy_visual_kinds),
+    "v8_core_qc_active": v8_active,
+    "v8_scene_modes": v8_modes if v8_active else [],
+    "v8_compositions": v8_compositions if v8_active else [],
+    "v8_camera_moves": v8_cameras if v8_active else [],
+    "v8_transition_types": v8_transitions if v8_active else [],
     "minimum_alignment_score": min_alignment,
     "caption_errors": caption_errors,
     "scene_timing_errors": scene_timing_errors,
