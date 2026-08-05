@@ -18,6 +18,15 @@ base_synthesize = module.synthesize
 applied_rates: dict[int, str] = {}
 applied_pitches: dict[int, str] = {}
 
+NATURAL_MIN_TEMPO = 0.88
+NATURAL_MAX_TEMPO = 1.12
+SLOW_REFIT_TARGET = 0.98
+FAST_REFIT_TARGET = 1.02
+MAX_TEMPO_ATTEMPTS = 3
+TEMPO_FAILURE = re.compile(
+    r"V3\.5 natural audio tempo failed: final atempo=([0-9.]+)x; allowed 0\.88-1\.12x"
+)
+
 
 def parse_percent(value: object) -> int:
     match = re.fullmatch(r"\s*([+-]?\d+)%\s*", str(value or "+0%"))
@@ -35,6 +44,21 @@ def format_percent(value: int) -> str:
 
 def format_pitch(value: int) -> str:
     return f"{value:+d}Hz"
+
+
+def refit_voice_rate(speed: float, current_rate: str) -> str:
+    """Choose a new Edge TTS rate that pulls global atempo back near 1.0.
+
+    The fitted tempo is approximately proportional to synthesized speech duration,
+    while Edge's rate ratio is approximately inverse to that duration. Therefore
+    new_rate_ratio = current_rate_ratio * measured_tempo / target_tempo.
+    """
+    current_ratio = max(0.20, 1.0 + parse_percent(current_rate) / 100.0)
+    target = SLOW_REFIT_TARGET if speed < NATURAL_MIN_TEMPO else FAST_REFIT_TARGET
+    requested_ratio = current_ratio * speed / target
+    requested_percent = round((requested_ratio - 1.0) * 100)
+    bounded_percent = max(-12, min(12, requested_percent))
+    return format_percent(bounded_percent)
 
 
 async def synthesize_with_scene_pacing(index: int, line: str):
@@ -67,11 +91,11 @@ async def synthesize_with_scene_pacing(index: int, line: str):
 module.synthesize = synthesize_with_scene_pacing
 
 
-def annotate_and_validate_audio() -> None:
+def annotate_and_validate_audio(retry_count: int = 0) -> None:
     timing_path = module.OUT_DIR / "scene-timing.json"
     timing = json.loads(timing_path.read_text(encoding="utf-8"))
     speed = float(timing.get("speed", 0))
-    if not 0.88 <= speed <= 1.12:
+    if not NATURAL_MIN_TEMPO <= speed <= NATURAL_MAX_TEMPO:
         raise RuntimeError(
             f"V3.5 natural audio tempo failed: final atempo={speed:.3f}x; allowed 0.88-1.12x"
         )
@@ -82,20 +106,52 @@ def annotate_and_validate_audio() -> None:
         item["effectiveVoicePitch"] = applied_pitches.get(index, "-2Hz")
         item["naturalTempoValidated"] = True
 
-    timing["naturalVoiceVersion"] = 2
-    timing["naturalTempoRange"] = [0.88, 1.12]
+    timing["naturalVoiceVersion"] = 3
+    timing["naturalTempoRange"] = [NATURAL_MIN_TEMPO, NATURAL_MAX_TEMPO]
+    timing["naturalTempoRetryCount"] = retry_count
+    timing["naturalTempoAutoRefit"] = retry_count > 0
     timing["sentenceTailPolicy"] = "retain-140ms-post-phoneme"
     timing_path.write_text(json.dumps(timing, ensure_ascii=False, indent=2), encoding="utf-8")
     print(
         "V3.5 natural voice ready: "
-        f"atempo={speed:.3f}x, scene rates={','.join(applied_rates.values())}, "
+        f"atempo={speed:.3f}x, retries={retry_count}, "
+        f"scene rates={','.join(applied_rates.values())}, "
         f"scene pitches={','.join(applied_pitches.values())}, tails=retained"
     )
 
 
 async def main() -> None:
-    await v34.main()
-    annotate_and_validate_audio()
+    last_error: RuntimeError | None = None
+
+    for attempt in range(1, MAX_TEMPO_ATTEMPTS + 1):
+        try:
+            await v34.main()
+            annotate_and_validate_audio(retry_count=attempt - 1)
+            return
+        except RuntimeError as error:
+            last_error = error
+            match = TEMPO_FAILURE.search(str(error))
+            if match is None or attempt >= MAX_TEMPO_ATTEMPTS:
+                raise
+
+            speed = float(match.group(1))
+            old_rate = str(module.VOICE_RATE)
+            new_rate = refit_voice_rate(speed, old_rate)
+            if new_rate == old_rate:
+                raise
+
+            print(
+                "V3.5 natural tempo auto-refit: "
+                f"attempt={attempt}, measured={speed:.3f}x, "
+                f"voice rate {old_rate} -> {new_rate}"
+            )
+            module.VOICE_RATE = new_rate
+            applied_rates.clear()
+            applied_pitches.clear()
+            v34.clear_generated_audio()
+
+    if last_error is not None:
+        raise last_error
 
 
 if __name__ == "__main__":
