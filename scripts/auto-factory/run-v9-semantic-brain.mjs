@@ -15,6 +15,7 @@ try {
   await run('repair-v9-semantic-families.mjs');
   await run('finalize-v9-semantic-contracts.mjs');
   await run('lock-v9-spoken-families.mjs');
+  await run('correct-v9-spatial-action-priority.mjs');
 
   // Gemini enriches only the already locked mise-en-scene, camera and image prompt.
   process.env.V9_AI_PROVIDER = originalProvider || 'auto';
@@ -27,4 +28,4 @@ try {
   }
 }
 
-console.log('V9 semantic brain orchestration complete: deterministic contracts -> spoken family lock -> AI art direction.');
+console.log('V9 semantic brain orchestration complete: deterministic contracts -> spoken family lock -> spatial action priority -> AI art direction.');
