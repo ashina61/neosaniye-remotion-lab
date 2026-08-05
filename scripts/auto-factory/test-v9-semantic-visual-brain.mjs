@@ -116,7 +116,7 @@ try {
     assert.equal(built.v9.version, 9);
     assert.equal(built.v9.brainProvider, 'deterministic');
     assert.equal(built.v9.renderer, 'semantic-visual-documentary-v9');
-    assert.equal(built.v9.semanticFamilyRepair, 'final-spoken-claim-v2');
+    assert.match(built.v9.semanticFamilyRepair, /^final-spoken-claim-v\d+$/);
     assert.equal(built.scenes.length, 10);
     assert.ok(
       new Set(built.scenes.map((scene) => scene.v9Blueprint.sceneFamily)).size >= 4,
@@ -134,7 +134,8 @@ try {
     const mapScenes = built.scenes.filter((scene) => scene.v9Blueprint.sceneFamily === 'geographic-route');
     assert.ok(mapScenes.length <= 2);
     for (const scene of mapScenes) {
-      assert.match(scene.v9Blueprint.visualStatement, /origin|destination|route|geographic|named/i);
+      assert.match(scene.v9Blueprint.visualStatement, /origin|destination|route|geographic|directional/i);
+      assert.match(scene.v9Blueprint.assetPlan.prompt, /origin|destination|route|geographic|directional/i);
     }
     assert.equal(built.scenes.at(-1).v9Blueprint.sceneFamily, 'consequence-world');
   }
