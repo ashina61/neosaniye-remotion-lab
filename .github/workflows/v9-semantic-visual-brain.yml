@@ -1,0 +1,47 @@
+name: V9 Semantic Visual Brain
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/auto-factory/*v9*'
+      - 'docs/V9_MASTER_PLAN.md'
+      - '.github/workflows/v9-semantic-visual-brain.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-visual-brain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Syntax checks
+        run: |
+          node --check scripts/auto-factory/v9-ai-provider-router.mjs
+          node --check scripts/auto-factory/build-semantic-visual-blueprint-v9.mjs
+          node --check scripts/auto-factory/generate-v9-ai-assets.mjs
+          node --check scripts/auto-factory/test-v9-semantic-visual-brain.mjs
+          python -m py_compile scripts/auto-factory/qc-v9-semantic-blueprint.py
+
+      - name: Cross-topic semantic regression
+        env:
+          GEMINI_API_KEY: ''
+          CLOUDFLARE_ACCOUNT_ID: ''
+          CLOUDFLARE_API_TOKEN: ''
+          POLLINATIONS_API_KEY: ''
+        run: node scripts/auto-factory/test-v9-semantic-visual-brain.mjs
