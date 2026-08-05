@@ -45,21 +45,13 @@ for index, (scene, contract) in enumerate(zip(scenes, contracts), start=1):
     subject = str(contract.get("subject", ""))
     if subject not in labels:
         subject_mismatch_scenes.append(index)
-    visible = " ".join(
-        [
-            str(scene.get("title", "")),
-            str(scene.get("kicker", "")),
-            str(scene.get("voiceLine", "")),
-            str(scene.get("heroVisual", "")),
-            str(scene.get("primaryMotif", "")),
-            str(scene.get("secondaryMotif", "")),
-            *map(str, scene.get("props", [])),
-            *map(str, scene.get("mustShow", [])),
-            *labels,
-            *[str(motif.get("label", "")) for motif in contract.get("motifs", []) if isinstance(motif, dict)],
-            *[str(beat.get("label", "")) for beat in scene.get("beats", [])],
-        ]
-    )
+    visible = " ".join([
+        str(scene.get("title", "")), str(scene.get("kicker", "")), str(scene.get("voiceLine", "")),
+        str(scene.get("heroVisual", "")), str(scene.get("primaryMotif", "")), str(scene.get("secondaryMotif", "")),
+        *map(str, scene.get("props", [])), *map(str, scene.get("mustShow", [])), *labels,
+        *[str(motif.get("label", "")) for motif in contract.get("motifs", []) if isinstance(motif, dict)],
+        *[str(beat.get("label", "")) for beat in scene.get("beats", [])],
+    ])
     if placeholder_pattern.search(visible):
         placeholder_scenes.append(index)
     if language == "en" and (re.search(r"[çğıöşüİ]", visible) or turkish_leak_pattern.search(visible)):
@@ -81,12 +73,23 @@ for mode in modes:
         previous_mode = mode
     longest_mode_run = max(longest_mode_run, current_run)
 
-v7_enabled = plan.get("v7", {}).get("version") == 7
-contract_versions_valid = bool(scenes) and all(
-    (int(contract.get("version", 0)) == 7 and int(contract.get("baseVersion", 0)) == 6)
-    if v7_enabled else int(contract.get("version", 0)) == 6
-    for contract in contracts
+v8_enabled = (
+    plan.get("v8", {}).get("version") == 8
+    and plan.get("v8", {}).get("renderer") == "visual-motion-documentary-v8"
 )
+v7_enabled = not v8_enabled and plan.get("v7", {}).get("version") == 7
+if v8_enabled:
+    contract_versions_valid = bool(scenes) and all(
+        int(contract.get("version", 0)) == 8 and int(contract.get("baseVersion", 0)) == 7
+        for contract in contracts
+    )
+elif v7_enabled:
+    contract_versions_valid = bool(scenes) and all(
+        int(contract.get("version", 0)) == 7 and int(contract.get("baseVersion", 0)) == 6
+        for contract in contracts
+    )
+else:
+    contract_versions_valid = bool(scenes) and all(int(contract.get("version", 0)) == 6 for contract in contracts)
 
 checks = {
     "universal_base_metadata_present": plan.get("v6", {}).get("renderer") == "universal-semantic-v6",
@@ -100,12 +103,17 @@ checks = {
     "universal_mode_diversity": len(set(modes)) >= min(3, len(scenes)),
     "universal_no_excessive_mode_run": longest_mode_run <= 3,
     "universal_fail_closed_enabled": plan.get("v6", {}).get("failClosed") is True and (
-        not v7_enabled or plan.get("v7", {}).get("failClosed") is True
+        plan.get("v8", {}).get("failClosed") is True if v8_enabled
+        else plan.get("v7", {}).get("failClosed") is True if v7_enabled
+        else True
     ),
 }
 
 report.setdefault("checks", {}).update(checks)
-if v7_enabled:
+if v8_enabled:
+    report["renderer"] = "visual-motion-documentary-v8"
+    report["renderer_version"] = 8
+elif v7_enabled:
     report["renderer"] = "adaptive-documentary-v7"
     report["renderer_version"] = 7
 elif plan.get("v6", {}).get("specializedRendererAvailable"):
@@ -114,7 +122,7 @@ elif plan.get("v6", {}).get("specializedRendererAvailable"):
 else:
     report["renderer"] = "universal-semantic-v6"
     report["renderer_version"] = 6
-report["universal_contract_version"] = 7 if v7_enabled else 6
+report["universal_contract_version"] = 8 if v8_enabled else (7 if v7_enabled else 6)
 report["v6_modes"] = modes
 report["v6_unique_modes"] = len(set(modes))
 report["v6_longest_mode_run"] = longest_mode_run
