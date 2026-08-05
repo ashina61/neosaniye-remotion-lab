@@ -39,22 +39,43 @@ const SCENE_FAMILIES = {
 const topicText = lower(`${plan.topic} ${plan.title} ${plan.category} ${plan.narration}`);
 const domain = DOMAIN_RULES.find(([, pattern]) => pattern.test(topicText))?.[0] || lower(plan.category) || 'technology';
 
+const localSceneText = (scene) => lower([
+  scene.title,
+  scene.voiceLine,
+  scene.sceneGoal,
+  scene.heroVisual,
+  ...(scene.mustShow || []),
+  ...(scene.supportVisuals || []),
+].join(' '));
+
 const sceneFamilyFor = (scene, index, total) => {
-  const text = lower(`${scene.title} ${scene.voiceLine} ${scene.sceneGoal} ${(scene.mustShow || []).join(' ')}`);
+  const text = localSceneText(scene);
   if (index === total - 1) return 'consequence-world';
-  if (/\b(route|from .+ to|corridor|journey|trade road|shipping lane|border|continent|desert|mountain pass|oasis)\b/.test(text)) return 'geographic-route';
-  if (/\b(lithograph\w*|circuit pattern\w*|transistor\w*|nanometer\w*|wafer layer\w*)\b/.test(text)) return 'mechanism-cutaway';
-  if (/\b(factory|fab|manufactur\w*|produc\w*|machine\w*|plant|clean room|assembly)\b/.test(text)) return 'industrial-process';
-  if (/\b(inside|layer|core|cutaway|component|mechanism|signal|fiber|chip|wafer|membrane|receptor|gene transfer|genes move|genes can also move|dna exchange)\b/.test(text)) return 'mechanism-cutaway';
-  if (/\b(bacter\w*|cell\w*|virus\w*|microb\w*|mutat\w*|gene\w*|immune\w*|microscop\w*|colon\w*)\b/.test(text)) return 'microscopic-process';
-  if (/\b(network\w*|spread\w*|propagat\w*|depend\w*|supply chain|connect\w*|flow\w*|distribut\w*)\b/.test(text)) return 'network-flow';
-  if (/\b(people|worker\w*|merchant\w*|scientist\w*|soldier\w*|leader\w*|operator\w*|engineer\w*|traveler\w*|caravan\w*)\b/.test(text)) return 'human-reconstruction';
-  if (/\b(trade|merchant|market|exchange|goods|cargo|handoff|sold|bought)\b/.test(text)) return 'market-exchange';
-  if (/\b(document|record|archive|evidence|report|decree|manuscript|photograph|paper|religion|story|knowledge)\b/.test(text)) return 'archival-evidence';
-  if (/\b(risk|threat|attack|damage|repair|protect|failure|danger|war|blockade|break|blocked)\b/.test(text)) return 'hazard-operation';
-  if (/\b(compare|versus|before|after|more than|less than|difference|two sides)\b/.test(text)) return 'comparison-stage';
-  if (/\b(first|then|later|eventually|century|year|timeline|led to|caused)\b/.test(text)) return 'timeline-causality';
-  return index === 0 ? 'environmental-reconstruction' : ['human-reconstruction', 'environmental-reconstruction', 'archival-evidence'][index % 3];
+
+  // Concrete actions take priority over words such as “route” or “network”.
+  if (/\b(market|bazaar|exchange|handoff|goods changed hands|bought|sold|stalls?|cargo transfer)\b/.test(text)) return 'market-exchange';
+  if (/\b(caravan|camel|merchant journey|traveler|traveller|pilgrim|workers?|engineers?|scientists?|soldiers?|operators?|scholars?)\b/.test(text)) return 'human-reconstruction';
+  if (/\b(ship|ships|merchant vessel|port|harbou?r|dock|sea route|maritime|aircraft)\b/.test(text)) return 'human-reconstruction';
+  if (/\b(war|blocked|blockade|danger|threat|attack|damage|repair|protect|failure|break one link|tax checkpoint|fortified checkpoint|fought over|disruption)\b/.test(text)) return 'hazard-operation';
+  if (/\b(paper|manuscript|document|record|archive|evidence|report|decree|photograph|religion|religions|stories|knowledge|scientific knowledge)\b/.test(text)) return 'archival-evidence';
+  if (/\b(mountain|mountains|desert|deserts|terrain|water source|oasis landscape|forest|ocean floor|habitat|environment)\b/.test(text)
+      && !/\b(from .+ to|linking .+ with|across continents|origin|destination|corridor)\b/.test(text)) return 'environmental-reconstruction';
+
+  if (/\b(factory|fab|manufactur\w*|produc\w*|machine\w*|plant|clean room|assembly|lithography equipment)\b/.test(text)) return 'industrial-process';
+  if (/\b(lithograph\w*|circuit pattern\w*|transistor\w*|nanometer\w*|wafer layer\w*|inside|layer|core|cutaway|component|mechanism|signal|fiber|chip|wafer|membrane|receptor|gene transfer|genes move|dna exchange)\b/.test(text)) return 'mechanism-cutaway';
+  if (/\b(bacter\w*|cell\w*|virus\w*|microb\w*|mutat\w*|gene\w*|immune\w*|microscop\w*|colon\w*|selection pressure)\b/.test(text)) return 'microscopic-process';
+
+  // A map is allowed only when the spoken claim is genuinely geographic.
+  if (/\b(from .+ to|linking .+ with|linking .+ to|across continents|trade corridor|shipping lane|land route|route linking|origin|destination|intermediary hubs?|border crossing)\b/.test(text)) return 'geographic-route';
+  if (/\b(spread between|propagat\w*|global dependency|supply chain|distributed network|connect\w* nodes|bottleneck|flow through the system)\b/.test(text)) return 'network-flow';
+  if (/\b(compare|versus|before|after|more than|less than|difference|two sides|alternative capacity)\b/.test(text)) return 'comparison-stage';
+  if (/\b(first|then|later|eventually|century|year|timeline|led to|caused|generation after generation)\b/.test(text)) return 'timeline-causality';
+
+  return index === 0 ? 'environmental-reconstruction' : [
+    'human-reconstruction',
+    'environmental-reconstruction',
+    'archival-evidence',
+  ][index % 3];
 };
 
 const visibleEntities = (scene) => unique([
@@ -78,6 +99,7 @@ const deterministicBlueprint = (scene, index, total) => {
   return {
     sceneId: Number(scene.id ?? index + 1),
     sceneFamily,
+    familyDecisionSource: 'spoken-claim-semantic-anchor',
     visualStatement: `Make the narration visible by showing ${subject} through ${family.goal.toLowerCase()}`,
     worldEntities: mustShow,
     spatialRelations: [
@@ -99,9 +121,21 @@ const deterministicBlueprint = (scene, index, total) => {
     assetPlan: {
       aiImageRecommended: family.physical,
       aiImagePriority: family.physical ? (index === 0 ? 5 : 3) : 1,
-      prompt: ['Vertical 9:16 editorial documentary illustration.', `Topic: ${clean(plan.topic)}.`, `Scene claim: ${clean(scene.voiceLine)}.`, `Show: ${mustShow.join(', ')}.`, `Environment: ${environment}.`, 'Clear foreground, midground and background. Historically or scientifically believable scale.', 'No generic infographic cards, no decorative geometry, no readable text, no logos.'].join(' '),
+      prompt: [
+        'Vertical 9:16 editorial documentary illustration.',
+        `Topic: ${clean(plan.topic)}.`,
+        `Scene claim: ${clean(scene.voiceLine)}.`,
+        `Show: ${mustShow.join(', ')}.`,
+        `Environment: ${environment}.`,
+        'Clear foreground, midground and background. Historically or scientifically believable scale.',
+        'No generic infographic cards, no decorative geometry, no readable text, no logos.',
+      ].join(' '),
       fallbackRenderer: family.fallback,
-      searchQueries: unique([`${clean(plan.topic)} ${subject}`, `${subject} ${environment}`, `${clean(scene.voiceLine)} documentary reference`]),
+      searchQueries: unique([
+        `${clean(plan.topic)} ${subject}`,
+        `${subject} ${environment}`,
+        `${clean(scene.voiceLine)} documentary reference`,
+      ]),
     },
     negativeRules: [
       'Do not represent the whole claim with one icon.',
@@ -125,20 +159,33 @@ const aiPrompt = JSON.stringify({
   language: plan.language,
   rules: {
     useOnlyNarrationAndResearch: true,
+    preserveSceneFamily: 'The deterministicDraft.sceneFamily is locked because it was selected from the spoken physical action. Do not change it.',
     physicalSceneRatioMinimum: 0.5,
     maximumMapScenes: 2,
     routeSceneRequirement: 'Every route scene must identify origin, destination, intermediary nodes, terrain and direction.',
-    sceneVariety: 'Use at least four scene families and never repeat the same family more than twice consecutively.',
+    sceneVariety: 'Vary composition, world entities, foreground action and camera intent even when two scenes share a family.',
     representationalPriority: 'Prefer people, places, objects, environments, machinery and physical actions over icons or geometric abstractions.',
     output: 'Return JSON only with {"scenes": [...]} and preserve every sceneId.',
   },
   research: (plan.research || []).slice(0, 8).map((item) => ({title: clean(item.title), excerpt: clean(item.excerpt || item.snippet).slice(0, 500)})),
-  scenes: (plan.scenes || []).map((scene, index) => ({sceneId: scene.id, narration: clean(scene.voiceLine), mustShow: scene.mustShow || [], currentVisualDirection: scene.visualContract?.visualDirection || {}, deterministicDraft: baseBlueprints[index]})),
+  scenes: (plan.scenes || []).map((scene, index) => ({
+    sceneId: scene.id,
+    narration: clean(scene.voiceLine),
+    mustShow: scene.mustShow || [],
+    currentVisualDirection: scene.visualContract?.visualDirection || {},
+    deterministicDraft: baseBlueprints[index],
+  })),
 }, null, 2);
 
 const ai = await generateStructuredJson({
   prompt: aiPrompt,
-  systemInstruction: ['You are NeoSaniye V9 Semantic Visual Brain.', 'Think like an editorial documentary illustrator and motion designer, not a dashboard designer.', 'Translate each spoken claim into a concrete spatial scene.', 'Output JSON only. Never add facts, names or locations not supported by the input.'].join(' '),
+  systemInstruction: [
+    'You are NeoSaniye V9 Semantic Visual Brain.',
+    'Think like an editorial documentary illustrator and motion designer, not a dashboard designer.',
+    'Translate each spoken claim into a concrete spatial scene.',
+    'The provided sceneFamily is a locked semantic anchor; enrich the scene but never change that field.',
+    'Output JSON only. Never add facts, names or locations not supported by the input.',
+  ].join(' '),
   validate: validateAiPlan,
 });
 
@@ -150,17 +197,27 @@ const mergedBlueprints = baseBlueprints.map((fallback) => {
     ...fallback,
     ...candidate,
     sceneId: fallback.sceneId,
+    sceneFamily: fallback.sceneFamily,
+    familyDecisionSource: fallback.familyDecisionSource,
     negativeRules: unique([...(fallback.negativeRules || []), ...(candidate.negativeRules || [])]).slice(0, 10),
-    assetPlan: {...fallback.assetPlan, ...(candidate.assetPlan || {}), searchQueries: unique([...(fallback.assetPlan.searchQueries || []), ...((candidate.assetPlan || {}).searchQueries || [])]).slice(0, 6)},
+    assetPlan: {
+      ...fallback.assetPlan,
+      ...(candidate.assetPlan || {}),
+      fallbackRenderer: fallback.assetPlan.fallbackRenderer,
+      searchQueries: unique([
+        ...(fallback.assetPlan.searchQueries || []),
+        ...((candidate.assetPlan || {}).searchQueries || []),
+      ]).slice(0, 6),
+    },
   };
 });
 
 const DOMAIN_ALTERNATES = {
-  history: ['human-reconstruction', 'environmental-reconstruction', 'market-exchange', 'archival-evidence'],
+  history: ['human-reconstruction', 'environmental-reconstruction', 'market-exchange', 'archival-evidence', 'hazard-operation'],
   science: ['microscopic-process', 'mechanism-cutaway', 'human-reconstruction', 'environmental-reconstruction'],
   technology: ['industrial-process', 'mechanism-cutaway', 'human-reconstruction', 'environmental-reconstruction'],
   nature: ['environmental-reconstruction', 'human-reconstruction', 'microscopic-process', 'hazard-operation'],
-  geopolitics: ['environmental-reconstruction', 'human-reconstruction', 'industrial-process', 'archival-evidence'],
+  geopolitics: ['environmental-reconstruction', 'human-reconstruction', 'industrial-process', 'archival-evidence', 'hazard-operation'],
   economy: ['industrial-process', 'market-exchange', 'human-reconstruction', 'environmental-reconstruction'],
   mystery: ['archival-evidence', 'human-reconstruction', 'hazard-operation', 'environmental-reconstruction'],
   space: ['environmental-reconstruction', 'mechanism-cutaway', 'comparison-stage', 'consequence-world'],
@@ -170,20 +227,35 @@ const alternates = DOMAIN_ALTERNATES[domain] || DOMAIN_ALTERNATES.technology;
 let mapCount = 0;
 for (let index = 0; index < mergedBlueprints.length; index += 1) {
   const blueprint = mergedBlueprints[index];
+  if (index === mergedBlueprints.length - 1) {
+    blueprint.sceneFamily = 'consequence-world';
+    blueprint.familyDecisionSource = 'mandatory-ending-consequence';
+    continue;
+  }
   if (blueprint.sceneFamily === 'geographic-route') {
     mapCount += 1;
-    if (mapCount > 2) blueprint.sceneFamily = alternates[index % alternates.length];
+    if (mapCount > 2) {
+      blueprint.sceneFamily = alternates.find((family) => family !== 'geographic-route') || 'environmental-reconstruction';
+      blueprint.familyDecisionSource = 'map-budget-repair';
+    }
   }
   if (index >= 2 && blueprint.sceneFamily === mergedBlueprints[index - 1].sceneFamily && blueprint.sceneFamily === mergedBlueprints[index - 2].sceneFamily) {
     blueprint.sceneFamily = alternates.find((family) => family !== blueprint.sceneFamily) || alternates[0];
+    blueprint.familyDecisionSource = 'family-spam-repair';
   }
 }
 
 const physicalFamilies = new Set(Object.entries(SCENE_FAMILIES).filter(([, value]) => value.physical).map(([key]) => key));
-const physicalCount = mergedBlueprints.filter((item) => physicalFamilies.has(item.sceneFamily)).length;
+let physicalCount = mergedBlueprints.filter((item) => physicalFamilies.has(item.sceneFamily)).length;
 const minimumPhysical = Math.ceil(mergedBlueprints.length * 0.5);
-for (let index = 0; physicalCount < minimumPhysical && index < mergedBlueprints.length; index += 1) {
-  if (!physicalFamilies.has(mergedBlueprints[index].sceneFamily) && mergedBlueprints[index].sceneFamily !== 'geographic-route') mergedBlueprints[index].sceneFamily = alternates[index % alternates.length];
+for (let index = 0; physicalCount < minimumPhysical && index < mergedBlueprints.length - 1; index += 1) {
+  const blueprint = mergedBlueprints[index];
+  if (!physicalFamilies.has(blueprint.sceneFamily) && blueprint.sceneFamily !== 'geographic-route') {
+    const replacement = alternates.find((family) => physicalFamilies.has(family) && family !== mergedBlueprints[index - 1]?.sceneFamily) || 'environmental-reconstruction';
+    blueprint.sceneFamily = replacement;
+    blueprint.familyDecisionSource = 'representational-ratio-repair';
+    physicalCount += 1;
+  }
 }
 
 for (const [index, scene] of (plan.scenes || []).entries()) scene.v9Blueprint = mergedBlueprints[index];
@@ -192,6 +264,7 @@ const familyCount = new Set(families).size;
 const representationalCount = families.filter((family) => physicalFamilies.has(family)).length;
 const representationalRatio = mergedBlueprints.length ? representationalCount / mergedBlueprints.length : 0;
 const provider = ai.provider || 'deterministic';
+const attempts = Array.isArray(ai.attempts) ? ai.attempts : [];
 
 plan.v9 = {
   ...(plan.v9 || {}),
@@ -199,8 +272,10 @@ plan.v9 = {
   renderer: 'semantic-visual-documentary-v9',
   brain: 'semantic-visual-blueprint-v9',
   brainProvider: provider,
+  brainModel: ai.model || null,
   providerAvailability: providerAvailability(),
-  providerErrorCount: ai.errors?.length || 0,
+  providerAttempts: attempts,
+  providerErrorCount: attempts.filter((attempt) => !attempt.ok).length,
   familyCount,
   sceneFamilies: families,
   mapSceneCount: families.filter((family) => family === 'geographic-route').length,
@@ -213,4 +288,4 @@ plan.v9 = {
 };
 
 await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
-console.log(`V9 semantic visual brain ready: provider=${provider}, families=${familyCount}, representational=${representationalCount}/${mergedBlueprints.length}, maps=${plan.v9.mapSceneCount}, errors=${plan.v9.providerErrorCount}`);
+console.log(`V9 semantic visual brain ready: provider=${provider}, model=${ai.model || 'none'}, families=${familyCount}, representational=${representationalCount}/${mergedBlueprints.length}, maps=${plan.v9.mapSceneCount}, errors=${plan.v9.providerErrorCount}`);
