@@ -54,7 +54,10 @@ for i, (eyebrow, title, note, c1, c2, accent) in enumerate(SCENES, 1):
     (OUT / f'scene-{i}.svg').write_text(svg, encoding='utf-8')
 
 text = '''1970’te Norveç’te yürüyüş yapan bir aile, vadinin içinde yanmış bir kadın cesedi buldu. Kadının kıyafetlerindeki bütün etiketler kesilmişti ve üzerinde kimliğini gösterecek hiçbir şey yoktu. Polis, tren istasyonunda ona ait iki valiz buldu: peruklar, farklı para birimleri ve şifreli notlarla doluydu. Kadın otellere sürekli farklı isimlerle kayıt olmuş, birçok dil konuşmuş ve ülke boyunca gizemli bir rota izlemişti. Otopsi, uyku haplarıyla karbonmonoksiti işaret etti; polis olayı muhtemel intihar olarak kapattı. Ama gerçek adı hâlâ bilinmiyor. Isdal Kadını bir casus muydu, yoksa kimliği özellikle mi silindi?'''
-subprocess.run(['edge-tts', '--voice', 'tr-TR-AhmetNeural', '--rate', '+14%', '--pitch', '-4Hz', '--text', text, '--write-media', str(AUDIO / 'narration.mp3')], check=True)
+subprocess.run([
+    'edge-tts', '--voice', 'tr-TR-AhmetNeural', '--rate', '+14%', '--pitch=-4Hz',
+    '--text', text, '--write-media', str(AUDIO / 'narration.mp3')
+], check=True)
 
 rate = 44100
 dur = 40
