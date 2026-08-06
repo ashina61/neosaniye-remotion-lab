@@ -51,7 +51,7 @@ const Scene: React.FC<{idx:number;dur:number;img:string;cap:string;sub:string}> 
 export const IsdalWoman: React.FC = () => (
   <AbsoluteFill style={{background:'#000'}}>
     <Audio src={staticFile('isdal/audio/narration.mp3')}/>
-    <Audio src={staticFile('isdal/audio/ambience.mp3')} volume={0.12}/>
+    <Audio src={staticFile('isdal/audio/ambience.wav')} volume={0.12}/>
     {scenes.map((s,i)=><Sequence key={s.from} from={s.from} durationInFrames={s.dur}><Scene idx={i} dur={s.dur} img={s.img} cap={s.cap} sub={s.sub}/></Sequence>)}
   </AbsoluteFill>
 );
