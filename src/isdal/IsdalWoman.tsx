@@ -2,12 +2,12 @@ import React from 'react';
 import {AbsoluteFill, Audio, Img, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 
 const scenes = [
-  {from:0,dur:180,img:'scene-1.svg',cap:'YANMIŞ BİR KADIN',sub:'1970 · ISDALEN'},
-  {from:180,dur:180,img:'scene-2.svg',cap:'ETİKETLER KESİLMİŞTİ',sub:'KİMLİĞİ SİLİNMİŞTİ'},
-  {from:360,dur:210,img:'scene-3.svg',cap:'ŞİFRELİ NOTLAR',sub:'İKİ VALİZ · PERUKLAR · PARA'},
-  {from:570,dur:240,img:'scene-4.svg',cap:'HER OTELDE BAŞKA BİR İSİM',sub:'SAHTE KİMLİKLER · GİZEMLİ ROTA'},
-  {from:810,dur:210,img:'scene-5.svg',cap:'MUHTEMEL İNTİHAR',sub:'DOSYA KAPATILDI'},
-  {from:1020,dur:180,img:'scene-6.svg',cap:'CASUS MUYDU?',sub:'GERÇEK ADI HÂLÂ BİLİNMİYOR'},
+  {from:0,dur:180,img:'scene-1.jpg',cap:'YANMIŞ BİR KADIN',sub:'1970 · ISDALEN'},
+  {from:180,dur:180,img:'scene-2.jpg',cap:'ETİKETLER KESİLMİŞTİ',sub:'KİMLİĞİ SİLİNMİŞTİ'},
+  {from:360,dur:210,img:'scene-3.jpg',cap:'ŞİFRELİ NOTLAR',sub:'İKİ VALİZ · PERUKLAR · PARA'},
+  {from:570,dur:240,img:'scene-4.jpg',cap:'HER OTELDE BAŞKA BİR İSİM',sub:'SAHTE KİMLİKLER · GİZEMLİ ROTA'},
+  {from:810,dur:210,img:'scene-5.jpg',cap:'MUHTEMEL İNTİHAR',sub:'DOSYA KAPATILDI'},
+  {from:1020,dur:180,img:'scene-6.jpg',cap:'CASUS MUYDU?',sub:'GERÇEK ADI HÂLÂ BİLİNMİYOR'},
 ];
 
 const Grain: React.FC = () => {
