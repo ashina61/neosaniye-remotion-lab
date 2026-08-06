@@ -69,4 +69,3 @@ with wave.open(str(AUDIO / 'ambience.wav'), 'w') as w:
         t = n / rate
         v = math.sin(2 * math.pi * 47 * t) * .08 + math.sin(2 * math.pi * 71 * t) * .04 + math.sin(2 * math.pi * .13 * t) * .03
         w.writeframesraw(struct.pack('<h', int(max(-1, min(1, v)) * 32767)))
-subprocess.run(['ffmpeg', '-y', '-i', str(AUDIO / 'ambience.wav'), '-codec:a', 'libmp3lame', '-b:a', '128k', str(AUDIO / 'ambience.mp3')], check=True)
