@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "title": "Bir Devin Çöküşü",
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "scenes": [
+    {"id":"origin","template":"document-reveal","duration":105,"headline":"KÜÇÜK BİR FİKİR","caption":"Her şey küçük başladı","eyebrow":"1997","accent":"#f6b72c"},
+    {"id":"growth","template":"big-number","duration":105,"headline":"50 MİLYON","caption":"Sonra herkes onu konuştu","eyebrow":"BÜYÜME","accent":"#ffdf64"},
+    {"id":"warning","template":"newspaper-stack","duration":105,"headline":"UYARILARI DİNLEMEDİLER","caption":"Manşetler peş peşe geldi","eyebrow":"KIRILMA","accent":"#ef5b42"},
+    {"id":"collapse","template":"character-shadow","duration":105,"headline":"BİNLERCE MAĞAZA KAPANDI","caption":"Çöküş artık görünüyordu","eyebrow":"SON PERDE","accent":"#e29a39"},
+    {"id":"debt","template":"big-number","duration":105,"headline":"45 MİLYAR $","caption":"Borç büyüdükçe zaman daraldı","eyebrow":"BORÇ","accent":"#67d3c0"},
+    {"id":"verdict","template":"final-verdict","duration":105,"headline":"GEÇ KALDILAR","caption":"Değişime direnen dev kaybetti","eyebrow":"DERS","accent":"#f44336"}
+  ]
+}
