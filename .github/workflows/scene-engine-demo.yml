@@ -1,0 +1,51 @@
+name: JSON Scene Engine Demo
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/scene-engine/**'
+      - 'public/scene-plan.json'
+      - '.github/workflows/scene-engine-demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Render JSON scene engine
+        run: |
+          mkdir -p out/review
+          npx remotion render src/scene-engine/index.tsx SceneEngineDemo out/scene-engine-demo.mp4 \
+            --codec=h264 \
+            --crf=16 \
+            --pixel-format=yuv420p \
+            --concurrency=2
+      - name: Build contact sheet
+        run: |
+          ffmpeg -y -i out/scene-engine-demo.mp4 \
+            -vf "fps=1/3.5,scale=270:-1,tile=3x2" \
+            -frames:v 1 out/review/scene-engine-contact.jpg
+      - name: Upload scene engine artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scene-engine-demo
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            out/scene-engine-demo.mp4
+            out/review/scene-engine-contact.jpg
