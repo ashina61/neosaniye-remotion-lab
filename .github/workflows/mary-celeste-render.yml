@@ -1,0 +1,84 @@
+name: Mary Celeste Practice Kit Reel
+
+on:
+  pull_request:
+    paths:
+      - 'src/mary-celeste/**'
+      - 'assets-b64/mary-celeste/**'
+      - 'public/db-cooper/textures/**'
+      - 'scripts/generate-mary-celeste-audio.py'
+      - '.github/workflows/mary-celeste-render.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      MARY_CELESTE_VOICE: tr-TR-AhmetNeural
+      MARY_CELESTE_VOICE_RATE: +4%
+      MARY_CELESTE_VOICE_PITCH: -3Hz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decode visual assets
+        run: |
+          mkdir -p public/mary-celeste
+          cat assets-b64/mary-celeste/assets.part.* | base64 --decode > /tmp/mary-celeste-assets.zip
+          unzip -o /tmp/mary-celeste-assets.zip -d public/mary-celeste
+          ls -lh public/mary-celeste
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Install voice dependency
+        run: python -m pip install --upgrade edge-tts
+
+      - name: Generate narration and ambience
+        run: python scripts/generate-mary-celeste-audio.py
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Render Mary Celeste reel
+        run: >-
+          npx remotion render
+          src/mary-celeste/index.ts
+          MaryCelesteShort
+          out/mary-celeste-practice-kit.mp4
+          --codec=h264
+          --crf=14
+          --audio-bitrate=192k
+          --pixel-format=yuv420p
+          --concurrency=2
+
+      - name: Upload rendered MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: mary-celeste-practice-kit
+          path: out/mary-celeste-practice-kit.mp4
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload voice manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: mary-celeste-voice-manifest
+          path: public/mary-celeste/audio/voice-manifest.json
+          if-no-files-found: error
+          retention-days: 14
