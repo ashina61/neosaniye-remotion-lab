@@ -1,9 +1,12 @@
 import React from 'react';
-import {AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
+import {ATLAS_DATA_URI} from './atlas';
 
 export const clamp = (v: number) => Math.max(0, Math.min(1, v));
 export const p = (frame: number, a: number, b: number) => clamp((frame - a) / Math.max(1, b - a));
 export const ease = (v: number) => v * v * (3 - 2 * v);
+
+const fallbackPalette = ['#0c2530','#16202a','#391816','#15343b','#241a14','#0a1b2a','#40201b','#122731'];
 
 export const FullAsset: React.FC<{
   src: number; scale?: number; x?: number; y?: number; opacity?: number;
@@ -15,14 +18,16 @@ export const FullAsset: React.FC<{
   const row = Math.floor(index / 4);
   return (
     <AbsoluteFill style={{overflow: 'hidden', opacity, transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})`, transformOrigin: '50% 50%', filter: `blur(${blur}px) brightness(${brightness}) contrast(${contrast}) saturate(${saturate})`, mixBlendMode}}>
-      <Img src={staticFile('hormuz-crisis-v9/atlas.webp')} style={{position: 'absolute', width: 4320, height: 15360, maxWidth: 'none', left: -col * 1080, top: -row * 1920}} />
+      {ATLAS_DATA_URI ? (
+        <Img src={ATLAS_DATA_URI} style={{position: 'absolute', width: 4320, height: 15360, maxWidth: 'none', left: -col * 1080, top: -row * 1920}} />
+      ) : (
+        <AbsoluteFill style={{background: `radial-gradient(circle at ${30 + col * 12}% ${25 + row * 6}%, rgba(255,70,55,.26), transparent 35%), linear-gradient(145deg, ${fallbackPalette[index % fallbackPalette.length]}, #03080b 75%)`}} />
+      )}
     </AbsoluteFill>
   );
 };
 
-export const Vignette: React.FC<{amount?: number}> = ({amount = 0.7}) => (
-  <AbsoluteFill style={{pointerEvents: 'none', background: `radial-gradient(circle at 50% 43%, transparent 32%, rgba(0,0,0,${amount * 0.42}) 67%, rgba(0,0,0,${amount}) 100%)`}} />
-);
+export const Vignette: React.FC<{amount?: number}> = ({amount = 0.7}) => <AbsoluteFill style={{pointerEvents: 'none', background: `radial-gradient(circle at 50% 43%, transparent 32%, rgba(0,0,0,${amount * 0.42}) 67%, rgba(0,0,0,${amount}) 100%)`}} />;
 
 export const Grain: React.FC = () => {
   const frame = useCurrentFrame();
@@ -38,9 +43,7 @@ export const Title: React.FC<{text: string; inFrame: number; outFrame?: number; 
   return <div style={{position: 'absolute', top, left: align === 'left' ? 72 : 50, right: align === 'left' ? undefined : 50, maxWidth, color: accent ? '#ff342e' : '#f7f4ed', fontFamily: 'Arial Narrow, Impact, sans-serif', fontWeight: 900, fontSize: size, lineHeight: 0.92, letterSpacing: -2.2, textTransform: 'uppercase', textAlign: align, whiteSpace: 'pre-line', textShadow: '0 6px 24px rgba(0,0,0,.8)', transform: `translateY(${interpolate(pop, [0, 1], [34, 0])}px) scale(${interpolate(pop, [0, 1], [0.9, 1])})`, opacity}}>{text}</div>;
 };
 
-export const BottomRule: React.FC<{label: string; color?: string}> = ({label, color = '#d83a31'}) => (
-  <div style={{position: 'absolute', left: 70, right: 70, bottom: 86, height: 48, display: 'flex', alignItems: 'center', gap: 16}}><div style={{width: 58, height: 5, background: color}} /><div style={{fontFamily: 'Arial, sans-serif', fontSize: 21, fontWeight: 800, color: '#d9ddd9', letterSpacing: 3}}>{label}</div></div>
-);
+export const BottomRule: React.FC<{label: string; color?: string}> = ({label, color = '#d83a31'}) => <div style={{position: 'absolute', left: 70, right: 70, bottom: 86, height: 48, display: 'flex', alignItems: 'center', gap: 16}}><div style={{width: 58, height: 5, background: color}} /><div style={{fontFamily: 'Arial, sans-serif', fontSize: 21, fontWeight: 800, color: '#d9ddd9', letterSpacing: 3}}>{label}</div></div>;
 
 export const Flash: React.FC<{at: number; color?: string; length?: number}> = ({at, color = '#fff', length = 7}) => {
   const frame = useCurrentFrame();
