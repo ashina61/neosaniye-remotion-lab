@@ -6,7 +6,9 @@
 - ID: `HormuzCrisisMasterV9`
 - Entry: `src/hormuz-crisis-v9/index.ts`
 - 1080x1920 / 30 FPS / 900 frames
-- 32 logical assets packed into `public/hormuz-crisis-v9/atlas.webp` (4x8 atlas)
+- 32 logical asset slots mapped by the V9 scene engine
+- The branch includes a safe procedural fallback when the atlas is not present
+- For the real generated-image version, place the supplied `atlas.webp` at `public/hormuz-crisis-v9/atlas.webp` and use the asset-backed `components.tsx` from the V9 overlay package
 
 ## Preview / render
 ```bash
